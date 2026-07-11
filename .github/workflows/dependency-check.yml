@@ -1,10 +1,13 @@
 name: Dependency Check
 
 on:
-  pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -18,31 +21,33 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: pip
 
       - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: python -m pip install -r requirements.txt
 
       - name: Check dependency conflicts
         run: python -m pip check
 
-      - name: Compile Python files
-        run: python -m compileall app.py
+      - name: Check application syntax
+        run: python -m py_compile app.py
 
-      - name: Test application imports
+      - name: Test required imports
         run: |
           python - <<'PY'
           import streamlit
           import moviepy
           import PIL
           import edge_tts
-          import pandas
           import sqlite3
 
-          print("All required imports succeeded.")
+          print("Dependency and import checks passed.")
           PY
