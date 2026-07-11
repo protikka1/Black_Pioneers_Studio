@@ -48,6 +48,5 @@ jobs:
           import PIL
           import edge_tts
           import sqlite3
-
           print("Dependency and import checks passed.")
           PY
