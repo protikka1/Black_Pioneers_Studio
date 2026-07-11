@@ -5,7 +5,7 @@
 Security updates are currently provided for the latest version of **Black Pioneers Studio**.
 
 | Version | Supported |
-|---|---|
+| --- | --- |
 | Latest `main` branch | Yes |
 | Older releases | No |
 
