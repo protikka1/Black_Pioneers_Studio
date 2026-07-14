@@ -10,7 +10,7 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 ---
 
-# Project Goals
+## Project Goals
 
 - Build a complete YouTube Shorts production studio.
 - Automate repetitive video editing tasks.
@@ -21,9 +21,9 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 ---
 
-# Core Features
+## Core Features
 
-## Pioneer Management
+### Pioneer Management
 
 - Add new pioneers
 - Edit pioneer profiles
@@ -34,7 +34,7 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 ---
 
-## Script Editor
+### Script Editor
 
 - Create scripts
 - Edit scripts
@@ -45,23 +45,23 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 ---
 
-## Media Library
+### Media Library
 
 Supported formats:
 
-### Images
+#### Images
 
 - JPG
 - JPEG
 - PNG
 - WEBP
 
-### Video
+#### Video
 
 - MP4
 - MOV
 
-### Audio
+#### Audio
 
 - MP3
 - WAV
@@ -69,7 +69,7 @@ Supported formats:
 
 ---
 
-## AI Narration
+### AI Narration
 
 Powered by Microsoft Edge TTS.
 
@@ -83,7 +83,7 @@ Features:
 
 ---
 
-## Video Generator
+### Video Generator
 
 Creates professional YouTube Shorts automatically.
 
@@ -102,9 +102,9 @@ Features:
 
 ## Database
 
-SQLite stores project data in `database/pioneers.db`.
+`backup_app.py` is the fully implemented entry point and stores project data in `database/pioneers.db` (created automatically at runtime; the `database/` directory is listed in `.gitignore`).
 
-The repository also contains `database/black_pioneers.db` as an additional database file.
+`app.py` is currently a scaffold — its database functions are stubs and no database path is configured.
 
 SQLite stores:
 
@@ -121,22 +121,22 @@ SQLite stores:
 
 Generated videos are stored by pioneer.
 
-Current directories used in this repository:
+The two entry points use different output directories:
 
-- `output/pioneers/` (used by `app.py`)
-- `generated/` (used by `backup_app.py`)
+- `backup_app.py` writes to `generated/<safe_pioneer_name>/` using a URL-safe version of the pioneer name.
+- `app.py` (scaffold) defines `output/pioneers/<pioneer_id>/` using a numeric ID.
 
-Example:
+Examples:
 
 ```
+generated/
+    hiram_revels/
+        first_us_senator_20240101_120000.mp4
+
 output/
     pioneers/
         1/
             first_us_senator.mp4
-
-generated/
-    hiram_revels/
-        first_us_senator.mp4
 ```
 
 ---
@@ -152,30 +152,20 @@ Black_Pioneers_Studio/
 ├── requirements.txt
 ├── LICENSE
 ├── SECURITY.md
-├── .env
 │
 ├── assets/
-│   ├── fonts/
 │   ├── images/
 │   ├── music/
-│   ├── video/
-│   └── videos/
+│   └── video/
 │
 ├── generated/
-├── output/
-│   └── pioneers/
-├── thumbnails/
-├── database/
-│   ├── pioneers.db
-│   └── black_pioneers.db
-├── logs/
-├── modules/
 ├── scripts/
-├── temp/
-│
-├── src/
-└── config/
+└── temp/
 ```
+
+> **Runtime directories** — the following are created automatically and are excluded from version control via `.gitignore`:
+> - `database/` — SQLite database used by `backup_app.py`
+> - `output/` — video output directory used by `app.py`
 
 ---
 
@@ -215,7 +205,13 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Run the application:
+Run the fully implemented application:
+
+```bash
+streamlit run backup_app.py
+```
+
+Or run the scaffold application:
 
 ```bash
 streamlit run app.py
@@ -223,7 +219,7 @@ streamlit run app.py
 
 ---
 
-# Workflow
+## Workflow
 
 1. Select or create a pioneer.
 2. Enter or load the script.
@@ -238,9 +234,9 @@ streamlit run app.py
 
 ---
 
-# Roadmap
+## Roadmap
 
-## Version 1.0
+### Version 1.0
 
 - Project management
 - SQLite database
@@ -249,7 +245,7 @@ streamlit run app.py
 - AI narration
 - YouTube Shorts generation
 
-## Version 2.0
+### Version 2.0
 
 - Automatic thumbnail generation
 - Batch video generation
@@ -257,7 +253,7 @@ streamlit run app.py
 - Caption templates
 - Voice presets
 
-## Version 3.0
+### Version 3.0
 
 - YouTube upload integration
 - Metadata generation
@@ -267,13 +263,13 @@ streamlit run app.py
 
 ---
 
-# License
+## License
 
 This project is intended for educational and historical content creation. Users are responsible for ensuring they have the necessary rights to all images, music, video, and other media used in generated content.
 
 ---
 
-# Project
+## Project
 
 **Black Pioneers: First in American History**
 
