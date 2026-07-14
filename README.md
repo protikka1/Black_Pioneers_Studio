@@ -12,12 +12,12 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 # Project Goals
 
-* Build a complete YouTube Shorts production studio.
-* Automate repetitive video editing tasks.
-* Organize hundreds of pioneer profiles.
-* Maintain a searchable SQLite database.
-* Produce consistent, professional-quality educational content.
-* Prepare videos for publishing on YouTube and other social media platforms.
+- Build a complete YouTube Shorts production studio.
+- Automate repetitive video editing tasks.
+- Organize hundreds of pioneer profiles.
+- Maintain a searchable SQLite database.
+- Produce consistent, professional-quality educational content.
+- Prepare videos for publishing on YouTube and other social media platforms.
 
 ---
 
@@ -25,23 +25,23 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 ## Pioneer Management
 
-* Add new pioneers
-* Edit pioneer profiles
-* Search by name
-* Search by category
-* Store biography information
-* Track generated videos
+- Add new pioneers
+- Edit pioneer profiles
+- Search by name
+- Search by category
+- Store biography information
+- Track generated videos
 
 ---
 
 ## Script Editor
 
-* Create scripts
-* Edit scripts
-* Save scripts
-* Load existing scripts
-* Character counter
-* Estimated narration duration
+- Create scripts
+- Edit scripts
+- Save scripts
+- Load existing scripts
+- Character counter
+- Estimated narration duration
 
 ---
 
@@ -51,21 +51,21 @@ Supported formats:
 
 ### Images
 
-* JPG
-* JPEG
-* PNG
-* WEBP
+- JPG
+- JPEG
+- PNG
+- WEBP
 
 ### Video
 
-* MP4
-* MOV
+- MP4
+- MOV
 
 ### Audio
 
-* MP3
-* WAV
-* M4A
+- MP3
+- WAV
+- M4A
 
 ---
 
@@ -75,11 +75,11 @@ Powered by Microsoft Edge TTS.
 
 Features:
 
-* Natural AI voices
-* Multiple voice selections
-* Adjustable speaking speed
-* Adjustable volume
-* Automatic narration generation
+- Natural AI voices
+- Multiple voice selections
+- Adjustable speaking speed
+- Adjustable volume
+- Automatic narration generation
 
 ---
 
@@ -89,27 +89,31 @@ Creates professional YouTube Shorts automatically.
 
 Features:
 
-* 1080 × 1920 (9:16)
-* AI narration
-* Automatic subtitles
-* Background music
-* Image slideshow
-* Video clips
-* Smooth transitions
-* H.264 MP4 export
+- 1080 × 1920 (9:16)
+- AI narration
+- Automatic subtitles
+- Background music
+- Image slideshow
+- Video clips
+- Smooth transitions
+- H.264 MP4 export
 
 ---
 
 ## Database
 
+SQLite stores project data in `database/pioneers.db`.
+
+The repository also contains `database/black_pioneers.db` as an additional database file.
+
 SQLite stores:
 
-* Pioneer information
-* Scripts
-* Generated videos
-* Categories
-* Video history
-* Project metadata
+- Pioneer information
+- Scripts
+- Generated videos
+- Categories
+- Video history
+- Project metadata
 
 ---
 
@@ -117,70 +121,79 @@ SQLite stores:
 
 Generated videos are stored by pioneer.
 
+Current directories used in this repository:
+
+- `output/pioneers/` (used by `app.py`)
+- `generated/` (used by `backup_app.py`)
+
 Example:
 
 ```
+output/
+    pioneers/
+        1/
+            first_us_senator.mp4
+
 generated/
     hiram_revels/
         first_us_senator.mp4
-
-    bessie_coleman/
-        first_black_woman_pilot.mp4
 ```
 
 ---
 
-# Project Structure
+## Project Structure
 
-```
+```text
 Black_Pioneers_Studio/
 │
 ├── app.py
+├── backup_app.py
 ├── README.md
 ├── requirements.txt
-├── pioneers.db
+├── LICENSE
+├── SECURITY.md
+├── .env
 │
 ├── assets/
+│   ├── fonts/
 │   ├── images/
 │   ├── music/
+│   ├── video/
 │   └── videos/
 │
 ├── generated/
+├── output/
+│   └── pioneers/
 ├── thumbnails/
 ├── database/
+│   ├── pioneers.db
+│   └── black_pioneers.db
 ├── logs/
+├── modules/
 ├── scripts/
 ├── temp/
 │
 ├── src/
-│   ├── ui.py
-│   ├── database.py
-│   ├── video_generator.py
-│   ├── captions.py
-│   ├── tts.py
-│   ├── exporter.py
-│   └── utils.py
-│
 └── config/
 ```
 
 ---
 
-# Technology Stack
+## Technology Stack
 
-* Python 3
-* Streamlit
-* SQLite
-* MoviePy
-* FFmpeg
-* Pillow
-* Edge-TTS
-* Pandas
-* OpenPyXL
+- Python 3
+- Streamlit
+- SQLite
+- MoviePy
+- FFmpeg
+- Pillow
+- Edge-TTS
+- Pandas
+- OpenPyXL
 
 ---
 
-# Installation
+## Installation
 
 Clone or create the project directory.
 
@@ -229,28 +242,28 @@ streamlit run app.py
 
 ## Version 1.0
 
-* Project management
-* SQLite database
-* Script editor
-* Media management
-* AI narration
-* YouTube Shorts generation
+- Project management
+- SQLite database
+- Script editor
+- Media management
+- AI narration
+- YouTube Shorts generation
 
 ## Version 2.0
 
-* Automatic thumbnail generation
-* Batch video generation
-* Timeline editor
-* Caption templates
-* Voice presets
+- Automatic thumbnail generation
+- Batch video generation
+- Timeline editor
+- Caption templates
+- Voice presets
 
 ## Version 3.0
 
-* YouTube upload integration
-* Metadata generation
-* Analytics dashboard
-* Multi-language support
-* AI-assisted script enhancement
+- YouTube upload integration
+- Metadata generation
+- Analytics dashboard
+- Multi-language support
+- AI-assisted script enhancement
 
 ---
 
