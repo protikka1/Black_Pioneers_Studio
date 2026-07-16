@@ -201,7 +201,7 @@ A dropdown lets you select and preview any previously generated Short directly i
 - **Image aspect ratio:** Any ratio works — the app centre-crops to 9:16. Avoid placing important subjects near the edges of wide landscape photos.
 - **Video clips:** Short clips (5–15 s) work well. Longer clips are trimmed to fit; very short clips are looped.
 - **Music volume:** Keep background music at 0.05–0.15 so the narration remains audible.
-- **Script length:** Aim for 30–90 seconds of narration (roughly 70–220 words at the default speed). YouTube Shorts must be 60 seconds or under to appear in the Shorts feed; longer videos will be treated as regular uploads.
+- **Script length:** Aim for 30–60 seconds of narration (roughly 70–145 words at the default speed). YouTube Shorts must be 60 seconds or under to appear in the Shorts feed; videos longer than 60 seconds are treated as regular uploads, not Shorts.
 - **File size:** There is no explicit upload limit, but very large files will slow processing.
 - **Rights:** Only upload media you have the rights to use. See the [Security and media rights](../README.md#security-and-media-rights) section.
 
