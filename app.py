@@ -373,6 +373,7 @@ def render_sidebar() -> str:
             "Create Pioneer",
             "Create Short",
             "Video Library",
+            "Tools",
             "Settings",
         ],
     )
@@ -645,6 +646,18 @@ def render_settings() -> None:
     st.selectbox("Default frame rate", [30, 24, 60], index=0)
 
 
+def render_tools() -> None:
+    """Display tools and utilities."""
+
+    st.title("Tools")
+
+    st.text_input("Output directory", value=str(OUTPUT_DIR), disabled=True)
+    st.text_input("Temporary directory", value=str(TEMP_DIR), disabled=True)
+
+    st.selectbox("Default resolution", ["1080x1920"], disabled=True)
+    st.selectbox("Default frame rate", [30, 24, 60], index=0)
+
+
 def main() -> None:
     configure_application()
 
@@ -658,6 +671,8 @@ def main() -> None:
         render_create_short()
     elif selected_page == "Video Library":
         render_video_library()
+    elif selected_page == "Tools":
+        render_tools()
     elif selected_page == "Settings":
         render_settings()
 

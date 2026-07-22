@@ -1,7 +1,9 @@
 {
   "recommendations": [
-    "ms-python.python",
     "ms-python.debugpy",
-    "ms-edgedevtools.vscode-edge-devtools"
+    "ms-edgedevtools.vscode-edge-devtools",
+    "ms-vscode.vscode-chat-customizations-evaluations",
+    "ms-vscode-remote.remote-containers",
+    "google.geminicodeassist"
   ]
 }

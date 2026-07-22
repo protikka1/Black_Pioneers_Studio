@@ -13,14 +13,9 @@
       "type": "debugpy",
       "request": "launch",
       "module": "streamlit",
-      "args": [
-        "run",
-        "${workspaceFolder}/Black_Pioneers_Studio/backup_app.py",
-        "--server.port",
-        "8501"
-      ],
+      "args": ["run", "backup_app.py", "--server.port", "8501"],
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}/Black_Pioneers_Studio",
+      "cwd": "${workspaceFolder}",
       "justMyCode": true
     },
     {
@@ -28,14 +23,9 @@
       "type": "debugpy",
       "request": "launch",
       "module": "streamlit",
-      "args": [
-        "run",
-        "${workspaceFolder}/Black_Pioneers_Studio/app.py",
-        "--server.port",
-        "8501"
-      ],
+      "args": ["run", "app.py", "--server.port", "8501"],
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}/Black_Pioneers_Studio",
+      "cwd": "${workspaceFolder}",
       "justMyCode": true,
       "preLaunchTask": "Initialize app.py database and output"
     }
