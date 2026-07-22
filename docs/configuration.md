@@ -147,7 +147,7 @@ where `safe_pioneer_name` and `safe_video_title` are produced by `safe_filename(
 |---|---|---|
 | `database/pioneers.db` | `backup_app.py:initialize_database()` | ✅ `database/*.db` |
 | `generated/` | `backup_app.py:generate_short()` | ✅ `generated/*` (`.gitkeep` kept) |
-| `temp/` | `backup_app.py:render_application()` | ✅ `temp/*` (`.gitkeep` kept) |
+| `temp/` | `backup_app.py:initialize_directories()`, `app.py:configure_application()` | ✅ `temp/*` (`.gitkeep` kept) |
 | `output/pioneers/` | `app.py:configure_application()` | ❌ not explicitly ignored (empty) |
 | `assets/images/` | Static (placeholder) | ✅ `assets/images/*` (`.gitkeep` kept) |
 | `assets/music/` | Static (placeholder) | ✅ `assets/music/*` (`.gitkeep` kept) |
