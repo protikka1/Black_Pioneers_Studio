@@ -2,11 +2,14 @@
 
 ## Overview
 
-**Black Pioneers Studio** is a Python-based desktop application for creating high-quality YouTube Shorts, podcasts, and educational videos about Black American pioneers.
+**Black Pioneers Studio** is a Streamlit-based project for creating educational short-form videos about Black American pioneers.
 
-The application automates the entire production workflow, allowing a creator to transform a written script and media assets into a fully rendered vertical video with AI narration, subtitles, background music, and organized project management.
+The repository currently contains two entry points:
 
-The project is designed for the **Black Pioneers: First in American History** educational series but is built to support any historical or educational content library.
+- `backup_app.py` — the working end-to-end pipeline (media upload, narration, captions, render, SQLite history table, and video preview/download).
+- `app.py` — a scaffold-style multi-page UI path that uses a simpler data model and a separate output layout.
+
+The project is designed for the **Black Pioneers: First in American History** educational series.
 
 ---
 
@@ -14,130 +17,91 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 - Build a complete YouTube Shorts production studio.
 - Automate repetitive video editing tasks.
-- Organize hundreds of pioneer profiles.
+- Organize pioneer profiles.
 - Maintain a searchable SQLite database.
-- Produce consistent, professional-quality educational content.
-- Prepare videos for publishing on YouTube and other social media platforms.
+- Produce consistent educational content.
 
 ---
 
 ## Core Features
 
-## Pioneer Management
+### Pioneer Management
 
-- Add new pioneers
-- Edit pioneer profiles
-- Search by name
-- Search by category
-- Store biography information
-- Track generated videos
+- Add pioneer profiles
+- Categorize pioneers
+- Store achievement and biography notes
 
----
+### Script Editor
 
-## Script Editor
-
-- Create scripts
-- Edit scripts
-- Save scripts
-- Load existing scripts
+- Enter and edit narration scripts
 - Character counter
 - Estimated narration duration
 
----
-
-## Media Library
+### Media Library
 
 Supported formats:
 
-### Images
+#### Images
 
 - JPG
 - JPEG
 - PNG
 - WEBP
 
-### Video
+#### Video
 
 - MP4
 - MOV
+- M4V
 
-### Audio
+#### Audio
 
 - MP3
 - WAV
 - M4A
 
----
-
-## AI Narration
+### AI Narration
 
 Powered by Microsoft Edge TTS.
 
-Features:
-
-- Natural AI voices
 - Multiple voice selections
 - Adjustable speaking speed
-- Adjustable volume
 - Automatic narration generation
 
----
+### Video Generation
 
-## Video Generator
-
-Creates professional YouTube Shorts automatically.
-
-Features:
-
-- 1080 × 1920 (9:16)
+- Vertical output (1080 × 1920)
 - AI narration
-- Automatic subtitles
-- Background music
-- Image slideshow
-- Video clips
-- Smooth transitions
+- Automatic subtitles/captions
+- Background music mixing
 - H.264 MP4 export
 
 ---
 
 ## Database
 
-SQLite stores project data in `database/pioneers.db`.
+SQLite data is stored in:
 
-The repository also contains `database/black_pioneers.db` as an additional database file.
+- `database/pioneers.db` (used by both entry points)
 
-SQLite stores:
-
-- Pioneer information
-- Scripts
-- Generated videos
-- Categories
-- Video history
-- Project metadata
+There is no tracked `database/black_pioneers.db` file in this repository.
 
 ---
 
-## Output
+## Output Paths by Entry Point
 
-Generated videos are stored by pioneer.
+### `backup_app.py` (working pipeline)
 
-Current directories used in this repository:
+- Generated MP4s: `generated/<safe_pioneer_name>/<safe_video_title>_<timestamp>.mp4`
+- SQLite database: `database/pioneers.db`
+- Temporary job files: `temp/<job_uuid>/` (cleaned up after generation)
 
-- `output/pioneers/` (used by `app.py`)
-- `generated/` (used by `backup_app.py`)
+### `app.py` (scaffold-style path)
 
-Example:
-
-```text
-output/
-    pioneers/
-        1/
-            first_us_senator.mp4
-
-generated/
-    hiram_revels/
-        first_us_senator.mp4
-```
+- Generated MP4s: `output/pioneers/<pioneer_id>_<safe_name>/output/short_<safe_name>_<timestamp>.mp4`
+- Related per-pioneer assets: `output/pioneers/<pioneer_id>_<safe_name>/{images,videos,audio,music,captions}/`
+- SQLite database module/file: `database/db.py` and `database/pioneers.db`
+- Temporary job files: `temp/<job_uuid>/` (cleaned up after generation)
 
 ---
 
@@ -145,36 +109,26 @@ generated/
 
 ```text
 Black_Pioneers_Studio/
-│
 ├── app.py
 ├── backup_app.py
+├── backup_app_before_preview_fix.py
 ├── README.md
 ├── requirements.txt
 ├── LICENSE
 ├── SECURITY.md
-├── .env
-│
+├── .gitignore
 ├── assets/
-│   ├── fonts/
 │   ├── images/
 │   ├── music/
-│   ├── video/
-│   └── videos/
-│
-├── generated/
-├── output/
-│   └── pioneers/
-├── thumbnails/
+│   └── video/
 ├── database/
-│   ├── pioneers.db
-│   └── black_pioneers.db
-├── logs/
-├── modules/
+│   ├── db.py
+│   └── pioneers.db                   # runtime-created, gitignored
+├── generated/                        # runtime-created, gitignored
 ├── scripts/
-├── temp/
-│
-├── src/
-└── config/
+│   └── update_dependencies.sh
+├── temp/                             # runtime-created, gitignored
+└── output/                           # runtime-created, gitignored (used by app.py)
 ```
 
 ---
@@ -195,27 +149,21 @@ Black_Pioneers_Studio/
 
 ## Installation
 
-Clone or create the project directory.
-
-Create a virtual environment:
+Create and activate a virtual environment, then install dependencies:
 
 ```bash
 python3 -m venv venv
-```
-
-Activate the environment:
-
-```bash
 source venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
-Run the application:
+Primary run command (current working pipeline):
+
+```bash
+streamlit run backup_app.py
+```
+
+Alternative scaffold UI entry point:
 
 ```bash
 streamlit run app.py
@@ -225,22 +173,17 @@ streamlit run app.py
 
 ## Workflow
 
-1. Select or create a pioneer.
-2. Enter or load the script.
-3. Upload images and video clips.
-4. Select background music.
-5. Generate AI narration.
-6. Create the YouTube Short.
-7. Preview the video.
-8. Save the project.
-9. Export the final MP4.
-10. Record the generated video in the SQLite database.
+1. Enter pioneer and script information.
+2. Upload images and/or video clips.
+3. Optionally upload background music.
+4. Generate narration, captions, and final short.
+5. Preview and download the rendered MP4.
 
 ---
 
 ## Roadmap
 
-## Version 1.0
+### Version 1.0
 
 - Project management
 - SQLite database
@@ -249,7 +192,7 @@ streamlit run app.py
 - AI narration
 - YouTube Shorts generation
 
-## Version 2.0
+### Version 2.0
 
 - Automatic thumbnail generation
 - Batch video generation
@@ -257,7 +200,7 @@ streamlit run app.py
 - Caption templates
 - Voice presets
 
-## Version 3.0
+### Version 3.0
 
 - YouTube upload integration
 - Metadata generation
@@ -277,4 +220,4 @@ This project is intended for educational and historical content creation. Users 
 
 ### Black Pioneers: First in American History
 
-A digital initiative dedicated to documenting, preserving, and sharing the achievements of Black American pioneers through searchable profiles, educational resources, and professionally produced short-form videos.
+A digital initiative dedicated to documenting, preserving, and sharing the achievements of Black American pioneers through searchable profiles, educational resources, and short-form videos.
