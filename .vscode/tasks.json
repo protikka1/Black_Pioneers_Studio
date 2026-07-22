@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Initialize app.py database and output",
+      "type": "shell",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-c",
+        "from app import initialize_database, PIONEERS_OUTPUT_DIR; initialize_database(); PIONEERS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/Black_Pioneers_Studio"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

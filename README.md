@@ -10,7 +10,7 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 ---
 
-# Project Goals
+## Project Goals
 
 - Build a complete YouTube Shorts production studio.
 - Automate repetitive video editing tasks.
@@ -21,7 +21,7 @@ The project is designed for the **Black Pioneers: First in American History** ed
 
 ---
 
-# Core Features
+## Core Features
 
 ## Pioneer Management
 
@@ -128,7 +128,7 @@ Current directories used in this repository:
 
 Example:
 
-```
+```text
 output/
     pioneers/
         1/
@@ -223,7 +223,7 @@ streamlit run app.py
 
 ---
 
-# Workflow
+## Workflow
 
 1. Select or create a pioneer.
 2. Enter or load the script.
@@ -238,7 +238,7 @@ streamlit run app.py
 
 ---
 
-# Roadmap
+## Roadmap
 
 ## Version 1.0
 
@@ -267,14 +267,14 @@ streamlit run app.py
 
 ---
 
-# License
+## License
 
 This project is intended for educational and historical content creation. Users are responsible for ensuring they have the necessary rights to all images, music, video, and other media used in generated content.
 
 ---
 
-# Project
+## Project
 
-**Black Pioneers: First in American History**
+### Black Pioneers: First in American History
 
 A digital initiative dedicated to documenting, preserving, and sharing the achievements of Black American pioneers through searchable profiles, educational resources, and professionally produced short-form videos.
