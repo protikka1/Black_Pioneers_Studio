@@ -18,3 +18,5 @@ assets/video/*
 !assets/images/.gitkeep
 !assets/music/.gitkeep
 !assets/video/.gitkeep
+
+output/
