@@ -98,9 +98,10 @@ There is no tracked `database/black_pioneers.db` file in this repository.
 
 ### `app.py` (scaffold-style path)
 
-- Generated MP4s: `output/pioneers/<pioneer_id>_<safe_name>/output/short_<safe_name>_<timestamp>.mp4`
+- Per-pioneer base folder: `output/pioneers/<pioneer_id>_<safe_name>/`
+- Generated MP4s: `<base_folder>/output/short_<safe_name>_<timestamp>.mp4`
 - Related per-pioneer assets: `output/pioneers/<pioneer_id>_<safe_name>/{images,videos,audio,music,captions}/`
-- SQLite database module/file: `database/db.py` and `database/pioneers.db`
+- SQLite database file: `database/pioneers.db` (accessed through helpers in `database/db.py`)
 - Temporary job files: `temp/<job_uuid>/` (cleaned up after generation)
 
 ---
@@ -111,7 +112,6 @@ There is no tracked `database/black_pioneers.db` file in this repository.
 Black_Pioneers_Studio/
 ├── app.py
 ├── backup_app.py
-├── backup_app_before_preview_fix.py
 ├── README.md
 ├── requirements.txt
 ├── LICENSE
