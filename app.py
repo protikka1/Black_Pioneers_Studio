@@ -661,12 +661,16 @@ def render_tools() -> None:
     st.write(f"Files in temp directory: **{len(temp_files)}**")
     if temp_files:
         if st.button("Clear temporary files", type="secondary"):
+            failed: list[str] = []
             for temp_file in temp_files:
                 try:
                     temp_file.unlink()
-                except OSError:
-                    pass
-            st.success("Temporary files cleared.")
+                except OSError as exc:
+                    failed.append(f"{temp_file.name}: {exc}")
+            if failed:
+                st.warning("Some files could not be deleted:\n" + "\n".join(failed))
+            else:
+                st.success("Temporary files cleared.")
             st.rerun()
     else:
         st.info("No temporary files to clear.")
@@ -675,7 +679,9 @@ def render_tools() -> None:
     videos = list_generated_videos()
     st.write(f"Total generated videos: **{len(videos)}**")
     if videos:
-        total_size_mb = sum(v.stat().st_size for v in videos) / (1024 * 1024)
+        total_size_mb = sum(
+            v.stat().st_size for v in videos if v.exists()
+        ) / (1024 * 1024)
         st.write(f"Total size: **{total_size_mb:.1f} MB**")
 
 
