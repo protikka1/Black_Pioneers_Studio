@@ -647,15 +647,36 @@ def render_settings() -> None:
 
 
 def render_tools() -> None:
-    """Display tools and utilities."""
+    """Display maintenance tools and storage information."""
 
     st.title("Tools")
 
+    st.subheader("Storage paths")
     st.text_input("Output directory", value=str(OUTPUT_DIR), disabled=True)
     st.text_input("Temporary directory", value=str(TEMP_DIR), disabled=True)
 
-    st.selectbox("Default resolution", ["1080x1920"], disabled=True)
-    st.selectbox("Default frame rate", [30, 24, 60], index=0)
+    st.subheader("Temporary files")
+    temp_files = list(TEMP_DIR.rglob("*")) if TEMP_DIR.exists() else []
+    temp_files = [f for f in temp_files if f.is_file()]
+    st.write(f"Files in temp directory: **{len(temp_files)}**")
+    if temp_files:
+        if st.button("Clear temporary files", type="secondary"):
+            for temp_file in temp_files:
+                try:
+                    temp_file.unlink()
+                except OSError:
+                    pass
+            st.success("Temporary files cleared.")
+            st.rerun()
+    else:
+        st.info("No temporary files to clear.")
+
+    st.subheader("Generated videos")
+    videos = list_generated_videos()
+    st.write(f"Total generated videos: **{len(videos)}**")
+    if videos:
+        total_size_mb = sum(v.stat().st_size for v in videos) / (1024 * 1024)
+        st.write(f"Total size: **{total_size_mb:.1f} MB**")
 
 
 def main() -> None:
