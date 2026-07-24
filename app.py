@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import re
 import shutil
 import sqlite3
@@ -41,6 +43,11 @@ FPS = 30
 
 SUPPORTED_IMAGES = {".jpg", ".jpeg", ".png", ".webp"}
 SUPPORTED_VIDEOS = {".mp4", ".mov", ".m4v"}
+
+# Caption defaults
+CAPTION_BASE_FONT_SIZE = 68
+CAPTION_BASE_WRAP_WIDTH = 25
+CAPTION_MAX_OPACITY = 255
 
 
 def make_safe_folder_name(name: str) -> str:
@@ -133,12 +140,17 @@ def split_script_into_captions(script: str, words_per_caption: int = 8) -> list[
     ]
 
 
-def create_caption_image(text: str, destination_path: Path) -> Path:
+def create_caption_image(
+    text: str,
+    destination_path: Path,
+    font_size: int = 68,
+    bg_opacity: int = 185,
+) -> Path:
     caption_height = 500
     canvas = Image.new("RGBA", (WIDTH, caption_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
-    font = load_font(68)
-    wrapped_text = textwrap.fill(text, width=25)
+    font = load_font(font_size)
+    wrapped_text = textwrap.fill(text, width=max(10, int(CAPTION_BASE_WRAP_WIDTH * CAPTION_BASE_FONT_SIZE / font_size)))
 
     bounding_box = draw.multiline_textbbox(
         (0, 0),
@@ -162,7 +174,7 @@ def create_caption_image(text: str, destination_path: Path) -> Path:
         min(caption_height - 20, text_y + text_height + padding),
     )
 
-    draw.rounded_rectangle(background_box, radius=30, fill=(0, 0, 0, 185))
+    draw.rounded_rectangle(background_box, radius=30, fill=(0, 0, 0, bg_opacity))
     draw.multiline_text(
         (text_x, text_y),
         wrapped_text,
@@ -220,8 +232,16 @@ def create_background_video(asset_paths: list[Path], duration: float, job_direct
     return concatenate_videoclips(clips, method="compose").with_duration(duration)
 
 
-def create_caption_clips(script: str, duration: float, captions_directory: Path):
-    captions = split_script_into_captions(script)
+def create_caption_clips(
+    script: str,
+    duration: float,
+    captions_directory: Path,
+    words_per_caption: int = 8,
+    caption_y: int = 1250,
+    font_size: int = 68,
+    bg_opacity: int = 185,
+):
+    captions = split_script_into_captions(script, words_per_caption)
 
     if not captions:
         return []
@@ -231,13 +251,13 @@ def create_caption_clips(script: str, duration: float, captions_directory: Path)
 
     for index, caption_text in enumerate(captions):
         caption_path = captions_directory / f"caption_{index:04d}.png"
-        create_caption_image(caption_text, caption_path)
+        create_caption_image(caption_text, caption_path, font_size=font_size, bg_opacity=bg_opacity)
 
         caption_clips.append(
             ImageClip(str(caption_path))
             .with_start(index * caption_duration)
             .with_duration(caption_duration)
-            .with_position(("center", 1250))
+            .with_position(("center", caption_y))
         )
 
     return caption_clips
@@ -290,6 +310,10 @@ def generate_short(
     music_volume: float,
     pioneer_folder: Path,
     job_directory: Path,
+    words_per_caption: int = 8,
+    caption_y: int = 1250,
+    caption_font_size: int = 68,
+    caption_bg_opacity: int = 185,
 ) -> tuple[Path, float]:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     narration_output = pioneer_folder / "audio" / f"narration_{timestamp}.mp3"
@@ -306,7 +330,15 @@ def generate_short(
     narration_clip.close()
 
     background_video = create_background_video(asset_paths, duration, job_directory)
-    caption_clips = create_caption_clips(script, duration, pioneer_folder / "captions")
+    caption_clips = create_caption_clips(
+        script,
+        duration,
+        pioneer_folder / "captions",
+        words_per_caption=words_per_caption,
+        caption_y=caption_y,
+        font_size=caption_font_size,
+        bg_opacity=caption_bg_opacity,
+    )
 
     final_video = CompositeVideoClip([background_video, *caption_clips], size=(WIDTH, HEIGHT))
     final_video = final_video.with_duration(duration)
@@ -583,6 +615,10 @@ def render_create_short() -> None:
                     music_volume=music_volume,
                     pioneer_folder=pioneer_folder,
                     job_directory=job_directory,
+                    words_per_caption=st.session_state.get("caption_words_per_caption", 8),
+                    caption_y=st.session_state.get("caption_y_position", 1250),
+                    caption_font_size=st.session_state.get("caption_font_size", 68),
+                    caption_bg_opacity=st.session_state.get("caption_bg_opacity", 185),
                 )
 
             st.success(f"Short created successfully in {duration:.1f} seconds.")
@@ -647,42 +683,142 @@ def render_settings() -> None:
 
 
 def render_tools() -> None:
-    """Display maintenance tools and storage information."""
+    """Display tools and utilities: caption layer settings, database export, and storage cleanup."""
 
     st.title("Tools")
 
-    st.subheader("Storage paths")
-    st.text_input("Output directory", value=str(OUTPUT_DIR), disabled=True)
-    st.text_input("Temporary directory", value=str(TEMP_DIR), disabled=True)
+    # ---- Caption Layer Settings ----------------------------------------
+    st.subheader("Caption Layer")
+    st.caption("These settings apply to automatically generated captions in new videos.")
 
-    st.subheader("Temporary files")
-    temp_files = list(TEMP_DIR.rglob("*")) if TEMP_DIR.exists() else []
-    temp_files = [f for f in temp_files if f.is_file()]
-    st.write(f"Files in temp directory: **{len(temp_files)}**")
-    if temp_files:
-        if st.button("Clear temporary files", type="secondary"):
-            failed: list[str] = []
-            for temp_file in temp_files:
-                try:
-                    temp_file.unlink()
-                except OSError as exc:
-                    failed.append(f"{temp_file.name}: {exc}")
-            if failed:
-                st.warning("Some files could not be deleted:\n" + "\n".join(failed))
-            else:
-                st.success("Temporary files cleared.")
-            st.rerun()
-    else:
-        st.info("No temporary files to clear.")
+    col1, col2 = st.columns(2)
 
-    st.subheader("Generated videos")
-    videos = list_generated_videos()
-    st.write(f"Total generated videos: **{len(videos)}**")
-    if videos:
-        total_size_mb = sum(
-            v.stat().st_size for v in videos if v.exists()
-        ) / (1024 * 1024)
-        st.write(f"Total size: **{total_size_mb:.1f} MB**")
+    with col1:
+        words_per_caption = st.slider(
+            "Words per caption",
+            min_value=4,
+            max_value=16,
+            value=st.session_state.get("caption_words_per_caption", 8),
+            step=1,
+            help="Number of words shown per caption card.",
+        )
+
+        caption_font_size = st.slider(
+            "Caption font size",
+            min_value=40,
+            max_value=96,
+            value=st.session_state.get("caption_font_size", 68),
+            step=4,
+            help="Font size for caption text in pixels.",
+        )
+
+    with col2:
+        caption_y = st.slider(
+            "Caption vertical position",
+            min_value=900,
+            max_value=1700,
+            value=st.session_state.get("caption_y_position", 1250),
+            step=50,
+            help=f"Distance in pixels from the top of the frame ({HEIGHT}px tall). 1250 is the lower third.",
+        )
+
+        bg_opacity_pct = st.slider(
+            "Caption background opacity",
+            min_value=0,
+            max_value=100,
+            value=int(st.session_state.get("caption_bg_opacity", 185) / CAPTION_MAX_OPACITY * 100),
+            step=5,
+            format="%d%%",
+            help="Opacity of the dark background box behind caption text.",
+        )
+
+    if st.button("Apply Caption Settings", type="primary"):
+        st.session_state["caption_words_per_caption"] = words_per_caption
+        st.session_state["caption_y_position"] = caption_y
+        st.session_state["caption_font_size"] = caption_font_size
+        st.session_state["caption_bg_opacity"] = int(bg_opacity_pct / 100 * CAPTION_MAX_OPACITY)
+        st.success("Caption layer settings saved. They will be used for all new videos.")
+
+    if st.button("Reset Caption Defaults"):
+        for key in ("caption_words_per_caption", "caption_y_position", "caption_font_size", "caption_bg_opacity"):
+            st.session_state.pop(key, None)
+        st.success("Caption settings reset to defaults.")
+
+    st.divider()
+
+    # ---- Database Tools ------------------------------------------------
+    st.subheader("Database")
+
+    pioneers = get_all_pioneers()
+    st.metric("Total pioneers", len(pioneers))
+
+    if pioneers:
+        output = io.StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=["id", "name", "category", "achievement", "biography", "created_at"],
+        )
+        writer.writeheader()
+        for pioneer in pioneers:
+            writer.writerow({
+                "id": pioneer["id"],
+                "name": pioneer["name"],
+                "category": pioneer["category"] or "",
+                "achievement": pioneer["achievement"] or "",
+                "biography": pioneer["biography"] or "",
+                "created_at": pioneer["created_at"],
+            })
+
+        st.download_button(
+            label="Export pioneers as CSV",
+            data=output.getvalue().encode(),
+            file_name=f"pioneers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    st.divider()
+
+    # ---- Storage Utilities --------------------------------------------
+    st.subheader("Storage")
+
+    def _dir_size_mb(path: Path) -> float:
+        if not path.exists():
+            return 0.0
+        return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / (1024 * 1024)
+
+    temp_mb = _dir_size_mb(TEMP_DIR)
+    temp_files = [path for path in TEMP_DIR.rglob("*") if path.is_file()] if TEMP_DIR.exists() else []
+    generated_count = len(list(PIONEERS_OUTPUT_DIR.rglob("*.mp4"))) if PIONEERS_OUTPUT_DIR.exists() else 0
+
+    col3, col4 = st.columns(2)
+    col3.metric("Temp directory size", f"{temp_mb:.1f} MB")
+    col4.metric("Generated videos", generated_count)
+
+    if st.button("Clear temporary files", disabled=not temp_files):
+        failed: list[str] = []
+
+        for temp_file in temp_files:
+            try:
+                temp_file.unlink()
+            except OSError as exc:
+                failed.append(f"{temp_file.name}: {exc}")
+
+        temp_directories = sorted(
+            (path for path in TEMP_DIR.rglob("*") if path.is_dir()),
+            reverse=True,
+        )
+        for temp_directory in temp_directories:
+            try:
+                temp_directory.rmdir()
+            except OSError:
+                continue
+
+        if failed:
+            st.warning("Some files could not be deleted:\n" + "\n".join(failed))
+        else:
+            st.success("Temporary files cleared.")
+        st.rerun()
 
 
 def main() -> None:
