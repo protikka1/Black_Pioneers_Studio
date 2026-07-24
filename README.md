@@ -171,6 +171,48 @@ streamlit run app.py
 
 ---
 
+## Production Deployment (Fletcher)
+
+This repository is ready to deploy on Fletcher with Streamlit.
+
+### Runtime command
+
+The startup command is defined in `Procfile`:
+
+```text
+web: streamlit run app.py --server.port ${PORT:-8501} --server.address 0.0.0.0
+```
+
+### Streamlit production config
+
+Production server settings are defined in `.streamlit/config.toml`:
+
+- `headless = true`
+- `address = "0.0.0.0"`
+- `port = 8501` (platform port override supported through `PORT`)
+
+### Fletcher requirements checklist
+
+Before go-live, confirm:
+
+1. Install Python dependencies from `requirements.txt`.
+2. `ffmpeg` is available on `PATH` (required by MoviePy rendering).
+3. Writable runtime directories are allowed for:
+   - `temp/`
+   - `output/`
+   - `database/` (SQLite file persistence)
+4. Environment exposes a web port (`PORT`) for the Streamlit process.
+
+### CI validation
+
+GitHub Actions workflow `.github/workflows/ci.yml` now validates:
+
+- dependency install
+- `python -m py_compile app.py database/db.py`
+- smoke tests in `tests/test_streamlit_smoke.py`
+
+---
+
 ## Workflow
 
 1. Enter pioneer and script information.

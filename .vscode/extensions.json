@@ -4,6 +4,7 @@
     "ms-edgedevtools.vscode-edge-devtools",
     "ms-vscode.vscode-chat-customizations-evaluations",
     "ms-vscode-remote.remote-containers",
-    "google.geminicodeassist"
+    "google.geminicodeassist",
+    "DiemasMichiels.emulate"
   ]
 }

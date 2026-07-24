@@ -10,6 +10,7 @@ import textwrap
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 import edge_tts
 import streamlit as st
@@ -75,7 +76,7 @@ def get_or_create_pioneer_folder(pioneer: dict[str, object]) -> Path:
     if folder_path:
         folder = Path(folder_path)
     else:
-        pioneer_id = int(pioneer["id"])
+        pioneer_id = int(str(pioneer["id"]))
         safe_name = make_safe_folder_name(str(pioneer["name"])) or "pioneer"
         folder = PIONEERS_OUTPUT_DIR / f"{pioneer_id}_{safe_name}"
         update_pioneer_folder(pioneer_id=pioneer_id, folder_path=str(folder))
@@ -202,12 +203,17 @@ def prepare_video_clip(source_path: Path, required_duration: float):
         crop_height = int(clip.w / target_ratio)
         clip = clip.cropped(y_center=clip.h / 2, height=crop_height)
 
-    clip = clip.resized(new_size=(WIDTH, HEIGHT))
+    clip = cast(Any, clip).resized(new_size=(WIDTH, HEIGHT))
+    clip_duration = float(clip.duration or 0.0)
 
-    if clip.duration >= required_duration:
+    if clip_duration <= 0:
+        clip.close()
+        raise ValueError(f"Video asset has no readable duration: {source_path}")
+
+    if clip_duration >= required_duration:
         return clip.subclipped(0, required_duration)
 
-    copies_needed = int(required_duration / clip.duration) + 1
+    copies_needed = int(required_duration / clip_duration) + 1
     repeated = concatenate_videoclips([clip for _ in range(copies_needed)], method="compose")
     return repeated.subclipped(0, required_duration)
 
@@ -398,6 +404,34 @@ def render_sidebar() -> str:
     st.sidebar.title("Black Pioneers Studio")
     st.sidebar.caption(PROJECT_TITLE)
 
+    pioneers = get_all_pioneers()
+    if pioneers:
+        pioneer_by_name: dict[str, dict[str, object]] = {
+            str(pioneer["name"]): pioneer
+            for pioneer in pioneers
+        }
+        pioneer_names = sorted(pioneer_by_name.keys())
+
+        default_name = st.session_state.get("selected_pioneer_name")
+        default_index = 0
+        if default_name in pioneer_names:
+            default_index = pioneer_names.index(default_name)
+
+        selected_name = st.sidebar.selectbox(
+            "Pioneers collection",
+            options=pioneer_names,
+            index=default_index,
+            help="Choose a saved pioneer profile.",
+            key="sidebar_pioneer_selector",
+        )
+
+        st.session_state["selected_pioneer_name"] = selected_name
+        st.session_state["selected_pioneer_id"] = int(
+            str(pioneer_by_name[selected_name]["id"])
+        )
+    else:
+        st.sidebar.info("No pioneers yet. Add one from Create Pioneer.")
+
     return st.sidebar.radio(
         "Navigation",
         [
@@ -432,14 +466,74 @@ def render_dashboard() -> None:
         st.info("No pioneers have been added yet.")
         return
 
-    for pioneer in pioneers:
+    pioneer_by_name: dict[str, dict[str, object]] = {
+        str(pioneer["name"]): pioneer
+        for pioneer in pioneers
+    }
+    pioneer_names = sorted(pioneer_by_name.keys())
+
+    default_name = st.session_state.get("selected_pioneer_name")
+    default_index = 0
+    if default_name in pioneer_names:
+        default_index = pioneer_names.index(default_name)
+
+    selected_name = st.selectbox(
+        "Pioneers collection",
+        options=pioneer_names,
+        index=default_index,
+        help="Choose a saved pioneer profile.",
+        key="dashboard_pioneer_selector",
+    )
+    if selected_name is None:
+        return
+
+    selected_pioneer = pioneer_by_name[selected_name]
+    st.session_state["selected_pioneer_name"] = selected_name
+    st.session_state["selected_pioneer_id"] = int(str(selected_pioneer["id"]))
+
+    show_preview = st.checkbox(
+        "Show selected pioneer preview",
+        value=st.session_state.get("dashboard_show_preview", False),
+        key="dashboard_show_preview",
+    )
+
+    if show_preview:
+        st.caption("Selected pioneer preview")
         with st.container(border=True):
-            st.markdown(f"### {pioneer['name']}")
+            st.markdown(f"### {selected_pioneer['name']}")
 
-            if pioneer["achievement"]:
-                st.write(pioneer["achievement"])
+            if selected_pioneer["achievement"]:
+                st.write(selected_pioneer["achievement"])
 
-            st.caption(f"Category: {pioneer['category'] or 'Not specified'}")
+            st.caption(f"Category: {selected_pioneer['category'] or 'Not specified'}")
+
+            if selected_pioneer.get("biography"):
+                with st.expander("Biography"):
+                    st.write(str(selected_pioneer["biography"]).strip())
+
+        st.divider()
+
+    st.caption("Pioneer collection")
+
+    collection_rows = []
+    for pioneer in pioneers:
+        if show_preview and int(str(pioneer["id"])) == st.session_state["selected_pioneer_id"]:
+            continue
+
+        achievement = str(pioneer.get("achievement") or "").strip()
+        if len(achievement) > 90:
+            achievement = f"{achievement[:87]}..."
+
+        collection_rows.append(
+            {
+                "Name": str(pioneer["name"]),
+                "Category": str(pioneer.get("category") or "Not specified"),
+                "Achievement": achievement or "-",
+            }
+        )
+
+    if collection_rows:
+        st.dataframe(collection_rows, hide_index=True)
 
 
 def render_create_pioneer() -> None:
@@ -509,9 +603,31 @@ def render_create_short() -> None:
         st.warning("Create at least one pioneer before generating a video.")
         return
 
-    pioneer_by_name = {pioneer["name"]: pioneer for pioneer in pioneers}
+    pioneer_by_name: dict[str, dict[str, object]] = {
+        str(pioneer["name"]): pioneer
+        for pioneer in pioneers
+    }
+    pioneer_names = sorted(pioneer_by_name.keys())
 
-    selected_name = st.selectbox("Select pioneer", options=list(pioneer_by_name.keys()))
+    default_name = st.session_state.get("selected_pioneer_name")
+    default_index = 0
+    if default_name in pioneer_names:
+        default_index = pioneer_names.index(default_name)
+
+    selected_name = st.selectbox(
+        "Pioneers collection",
+        options=pioneer_names,
+        index=default_index,
+        help="Choose a saved pioneer profile.",
+    )
+    if selected_name is None:
+        st.warning("Select a pioneer to continue.")
+        return
+
+    st.session_state["selected_pioneer_name"] = selected_name
+    st.session_state["selected_pioneer_id"] = int(
+        str(pioneer_by_name[selected_name]["id"])
+    )
 
     script = st.text_area(
         "Narration script",
@@ -635,6 +751,12 @@ def render_create_short() -> None:
 
             st.code(str(output_path))
 
+        except ValueError as exc:
+            st.error(f"Unable to generate short: {exc}")
+            st.info(
+                "One of the uploaded videos appears unreadable or has no duration. "
+                "Try another video file or convert it to MP4 (H.264 + AAC)."
+            )
         except Exception as exc:
             st.error(f"Unable to generate short: {exc}")
             if "ffmpeg" in str(exc).lower():
