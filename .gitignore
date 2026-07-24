@@ -1,4 +1,3 @@
-.buildozer/
 venv/
 .venv/
 __pycache__/
@@ -21,3 +20,7 @@ assets/video/*
 !assets/video/.gitkeep
 
 output/
+
+# Kivy/Buildozer Android artifacts (not used by this project)
+.buildozer/
+buildozer.spec
