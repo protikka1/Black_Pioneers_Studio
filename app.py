@@ -50,6 +50,18 @@ CAPTION_BASE_WRAP_WIDTH = 25
 CAPTION_MAX_OPACITY = 255
 
 
+def get_caption_wrap_width(font_size: int) -> int:
+    return max(10, int(CAPTION_BASE_WRAP_WIDTH * CAPTION_BASE_FONT_SIZE / font_size))
+
+
+def opacity_to_percentage(opacity: int) -> int:
+    return int(opacity / CAPTION_MAX_OPACITY * 100)
+
+
+def percentage_to_opacity(percentage: int) -> int:
+    return int(percentage / 100 * CAPTION_MAX_OPACITY)
+
+
 def make_safe_folder_name(name: str) -> str:
     safe_name = name.strip().lower()
     safe_name = re.sub(r"[^a-z0-9]+", "_", safe_name)
@@ -150,7 +162,7 @@ def create_caption_image(
     canvas = Image.new("RGBA", (WIDTH, caption_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
     font = load_font(font_size)
-    wrapped_text = textwrap.fill(text, width=max(10, int(CAPTION_BASE_WRAP_WIDTH * CAPTION_BASE_FONT_SIZE / font_size)))
+    wrapped_text = textwrap.fill(text, width=get_caption_wrap_width(font_size))
 
     bounding_box = draw.multiline_textbbox(
         (0, 0),
@@ -726,7 +738,7 @@ def render_tools() -> None:
             "Caption background opacity",
             min_value=0,
             max_value=100,
-            value=int(st.session_state.get("caption_bg_opacity", 185) / CAPTION_MAX_OPACITY * 100),
+            value=opacity_to_percentage(st.session_state.get("caption_bg_opacity", 185)),
             step=5,
             format="%d%%",
             help="Opacity of the dark background box behind caption text.",
@@ -736,7 +748,7 @@ def render_tools() -> None:
         st.session_state["caption_words_per_caption"] = words_per_caption
         st.session_state["caption_y_position"] = caption_y
         st.session_state["caption_font_size"] = caption_font_size
-        st.session_state["caption_bg_opacity"] = int(bg_opacity_pct / 100 * CAPTION_MAX_OPACITY)
+        st.session_state["caption_bg_opacity"] = percentage_to_opacity(bg_opacity_pct)
         st.success("Caption layer settings saved. They will be used for all new videos.")
 
     if st.button("Reset Caption Defaults"):
