@@ -42,14 +42,24 @@ def get_render_job_manager() -> RenderJobManager:
 
 def validate_caption_configuration() -> None:
     if CAPTION_MAX_OPACITY <= 0:
-        raise ValueError("CAPTION_MAX_OPACITY must be greater than zero.")
+        raise ValueError(
+            f"CAPTION_MAX_OPACITY must be greater than zero, got: {CAPTION_MAX_OPACITY}"
+        )
 
 
 def opacity_to_percentage(opacity: int) -> int:
+    if CAPTION_MAX_OPACITY <= 0:
+        raise ValueError(
+            f"CAPTION_MAX_OPACITY must be greater than zero, got: {CAPTION_MAX_OPACITY}"
+        )
     return int(opacity / CAPTION_MAX_OPACITY * 100)
 
 
 def percentage_to_opacity(percentage: int) -> int:
+    if CAPTION_MAX_OPACITY <= 0:
+        raise ValueError(
+            f"CAPTION_MAX_OPACITY must be greater than zero, got: {CAPTION_MAX_OPACITY}"
+        )
     return int(percentage / 100 * CAPTION_MAX_OPACITY)
 
 
