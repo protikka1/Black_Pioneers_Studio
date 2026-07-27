@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import shutil
 import sqlite3
 import uuid
@@ -41,10 +42,14 @@ def get_render_job_manager() -> RenderJobManager:
 
 
 def opacity_to_percentage(opacity: int) -> int:
+    if CAPTION_MAX_OPACITY <= 0:
+        return 0
     return int(opacity / CAPTION_MAX_OPACITY * 100)
 
 
 def percentage_to_opacity(percentage: int) -> int:
+    if CAPTION_MAX_OPACITY <= 0:
+        return 0
     return int(percentage / 100 * CAPTION_MAX_OPACITY)
 
 
@@ -663,26 +668,23 @@ def render_tools() -> None:
 
     if st.button("Clear temporary files", disabled=temp_mb == 0):
         failed: list[str] = []
-        temp_files: list[Path] = []
-        temp_directories: list[Path] = []
 
-        for temp_path in TEMP_DIR.rglob("*"):
-            if temp_path.is_file():
-                temp_files.append(temp_path)
-            elif temp_path.is_dir():
-                temp_directories.append(temp_path)
+        for root, directories, files in os.walk(TEMP_DIR, topdown=False):
+            root_path = Path(root)
 
-        for temp_file in temp_files:
-            try:
-                temp_file.unlink()
-            except OSError as exc:
-                failed.append(f"{temp_file.name}: {exc}")
+            for file_name in files:
+                temp_file = root_path / file_name
+                try:
+                    temp_file.unlink()
+                except OSError as exc:
+                    failed.append(f"{temp_file.name}: {exc}")
 
-        for temp_directory in sorted(temp_directories, reverse=True):
-            try:
-                temp_directory.rmdir()
-            except OSError:
-                continue
+            for directory_name in directories:
+                temp_directory = root_path / directory_name
+                try:
+                    temp_directory.rmdir()
+                except OSError as exc:
+                    failed.append(f"{temp_directory.name}: {exc}")
 
         if failed:
             st.warning("Some files could not be deleted:\n" + "\n".join(failed))
