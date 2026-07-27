@@ -52,7 +52,7 @@
       "command": "${command:python.interpreterPath}",
       "args": [
         "-c",
-        "from app import initialize_database, PIONEERS_OUTPUT_DIR; initialize_database(); PIONEERS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)"
+        "from database.connection import initialize_database; from black_pioneers_studio.paths import ensure_runtime_directories; ensure_runtime_directories(); initialize_database()"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
