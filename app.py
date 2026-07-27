@@ -655,15 +655,22 @@ def render_tools() -> None:
         return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / (1024 * 1024)
 
     temp_mb = _dir_size_mb(TEMP_DIR)
-    temp_files = [path for path in TEMP_DIR.rglob("*") if path.is_file()] if TEMP_DIR.exists() else []
     generated_count = len(list(PIONEERS_OUTPUT_DIR.rglob("*.mp4"))) if PIONEERS_OUTPUT_DIR.exists() else 0
 
     col3, col4 = st.columns(2)
     col3.metric("Temp directory size", f"{temp_mb:.1f} MB")
     col4.metric("Generated videos", generated_count)
 
-    if st.button("Clear temporary files", disabled=not temp_files):
+    if st.button("Clear temporary files", disabled=temp_mb == 0):
         failed: list[str] = []
+        temp_files: list[Path] = []
+        temp_directories: list[Path] = []
+
+        for temp_path in TEMP_DIR.rglob("*"):
+            if temp_path.is_file():
+                temp_files.append(temp_path)
+            elif temp_path.is_dir():
+                temp_directories.append(temp_path)
 
         for temp_file in temp_files:
             try:
@@ -671,11 +678,7 @@ def render_tools() -> None:
             except OSError as exc:
                 failed.append(f"{temp_file.name}: {exc}")
 
-        temp_directories = sorted(
-            (path for path in TEMP_DIR.rglob("*") if path.is_dir()),
-            reverse=True,
-        )
-        for temp_directory in temp_directories:
+        for temp_directory in sorted(temp_directories, reverse=True):
             try:
                 temp_directory.rmdir()
             except OSError:
