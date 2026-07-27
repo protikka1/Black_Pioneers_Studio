@@ -17,11 +17,13 @@ class RenderJobManagerTests(unittest.TestCase):
         job_2 = manager.run_render_job(pioneer_id=1, task=task, request_key="abc")
 
         # Wait until completion by polling known status transitions.
-        for _ in range(100):
+        for _ in range(200):
             current = manager.get_job(job_1.job_id)
             if current and current.status in {"completed", "failed"}:
                 break
-
+            time.sleep(0.01)
+        else:
+            self.fail("Render job did not complete within timeout")
         self.assertEqual(job_1.job_id, job_2.job_id)
         self.assertEqual(calls["count"], 1)
 
