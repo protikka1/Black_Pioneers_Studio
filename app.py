@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 import shutil
 import sqlite3
 import uuid
@@ -41,18 +40,17 @@ def get_render_job_manager() -> RenderJobManager:
     return RenderJobManager(max_workers=2)
 
 
-def get_caption_max_opacity() -> int:
+def validate_caption_configuration() -> None:
     if CAPTION_MAX_OPACITY <= 0:
         raise ValueError("CAPTION_MAX_OPACITY must be greater than zero.")
-    return CAPTION_MAX_OPACITY
 
 
 def opacity_to_percentage(opacity: int) -> int:
-    return int(opacity / get_caption_max_opacity() * 100)
+    return int(opacity / CAPTION_MAX_OPACITY * 100)
 
 
 def percentage_to_opacity(percentage: int) -> int:
-    return int(percentage / 100 * get_caption_max_opacity())
+    return int(percentage / 100 * CAPTION_MAX_OPACITY)
 
 
 def configure_application() -> None:
@@ -65,6 +63,7 @@ def configure_application() -> None:
         initial_sidebar_state="expanded",
     )
 
+    validate_caption_configuration()
     ensure_runtime_directories()
     initialize_database()
 
@@ -661,6 +660,23 @@ def render_tools() -> None:
             return 0.0
         return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / (1024 * 1024)
 
+    def _clear_temp_directory(path: Path, failed: list[str], *, remove_root: bool = False) -> None:
+        for child in path.iterdir():
+            if child.is_dir():
+                _clear_temp_directory(child, failed, remove_root=True)
+                continue
+
+            try:
+                child.unlink()
+            except OSError as exc:
+                failed.append(f"{child.relative_to(TEMP_DIR)}: {exc}")
+
+        if remove_root:
+            try:
+                path.rmdir()
+            except OSError as exc:
+                failed.append(f"{path.relative_to(TEMP_DIR)}: {exc}")
+
     temp_mb = _dir_size_mb(TEMP_DIR)
     generated_count = len(list(PIONEERS_OUTPUT_DIR.rglob("*.mp4"))) if PIONEERS_OUTPUT_DIR.exists() else 0
 
@@ -670,26 +686,12 @@ def render_tools() -> None:
 
     if st.button("Clear temporary files", disabled=temp_mb == 0):
         failed: list[str] = []
-
-        for root, directories, files in os.walk(TEMP_DIR, topdown=False):
-            root_path = Path(root)
-
-            for file_name in files:
-                temp_file = root_path / file_name
-                try:
-                    temp_file.unlink()
-                except OSError as exc:
-                    failed.append(f"{temp_file.relative_to(TEMP_DIR)}: {exc}")
-
-            for directory_name in directories:
-                temp_directory = root_path / directory_name
-                try:
-                    temp_directory.rmdir()
-                except OSError as exc:
-                    failed.append(f"{temp_directory.relative_to(TEMP_DIR)}: {exc}")
+        if TEMP_DIR.exists():
+            _clear_temp_directory(TEMP_DIR, failed)
 
         if failed:
-            st.warning("Some files could not be deleted:\n" + "\n".join(failed))
+            st.warning("Some files could not be deleted:")
+            st.text("\n".join(failed))
         else:
             st.success("Temporary files cleared.")
         st.rerun()
