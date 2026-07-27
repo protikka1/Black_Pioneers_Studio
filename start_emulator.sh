@@ -1,9 +1,9 @@
 #!/bin/bash
 # Start BlackPioneer Android Emulator
-EMULATOR="/Users/za914/.buildozer/android/platform/android-sdk/emulator/emulator"
-ADB="/Users/za914/Downloads/platform-tools/adb"
-AVD="BlackPioneer_API33"
-SDK="/Users/za914/.buildozer/android/platform/android-sdk"
+SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
+EMULATOR="${EMULATOR_BIN:-$SDK/emulator/emulator}"
+ADB="${ADB_BIN:-$SDK/platform-tools/adb}"
+AVD="${AVD_NAME:-BlackPioneer_API33}"
 
 export ANDROID_SDK_ROOT="$SDK"
 export ANDROID_HOME="$SDK"
