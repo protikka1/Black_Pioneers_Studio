@@ -41,16 +41,18 @@ def get_render_job_manager() -> RenderJobManager:
     return RenderJobManager(max_workers=2)
 
 
-def opacity_to_percentage(opacity: int) -> int:
+def get_caption_max_opacity() -> int:
     if CAPTION_MAX_OPACITY <= 0:
-        return 0
-    return int(opacity / CAPTION_MAX_OPACITY * 100)
+        raise ValueError("CAPTION_MAX_OPACITY must be greater than zero.")
+    return CAPTION_MAX_OPACITY
+
+
+def opacity_to_percentage(opacity: int) -> int:
+    return int(opacity / get_caption_max_opacity() * 100)
 
 
 def percentage_to_opacity(percentage: int) -> int:
-    if CAPTION_MAX_OPACITY <= 0:
-        return 0
-    return int(percentage / 100 * CAPTION_MAX_OPACITY)
+    return int(percentage / 100 * get_caption_max_opacity())
 
 
 def configure_application() -> None:
@@ -677,14 +679,14 @@ def render_tools() -> None:
                 try:
                     temp_file.unlink()
                 except OSError as exc:
-                    failed.append(f"{temp_file.name}: {exc}")
+                    failed.append(f"{temp_file.relative_to(TEMP_DIR)}: {exc}")
 
             for directory_name in directories:
                 temp_directory = root_path / directory_name
                 try:
                     temp_directory.rmdir()
                 except OSError as exc:
-                    failed.append(f"{temp_directory.name}: {exc}")
+                    failed.append(f"{temp_directory.relative_to(TEMP_DIR)}: {exc}")
 
         if failed:
             st.warning("Some files could not be deleted:\n" + "\n".join(failed))
