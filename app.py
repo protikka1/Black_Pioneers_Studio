@@ -40,27 +40,20 @@ def get_render_job_manager() -> RenderJobManager:
     return RenderJobManager(max_workers=2)
 
 
-def validate_caption_configuration() -> None:
+def get_valid_caption_max_opacity() -> int:
     if CAPTION_MAX_OPACITY <= 0:
         raise ValueError(
             f"CAPTION_MAX_OPACITY must be greater than zero, got: {CAPTION_MAX_OPACITY}"
         )
+    return CAPTION_MAX_OPACITY
 
 
 def opacity_to_percentage(opacity: int) -> int:
-    if CAPTION_MAX_OPACITY <= 0:
-        raise ValueError(
-            f"CAPTION_MAX_OPACITY must be greater than zero, got: {CAPTION_MAX_OPACITY}"
-        )
-    return int(opacity / CAPTION_MAX_OPACITY * 100)
+    return int(opacity / get_valid_caption_max_opacity() * 100)
 
 
 def percentage_to_opacity(percentage: int) -> int:
-    if CAPTION_MAX_OPACITY <= 0:
-        raise ValueError(
-            f"CAPTION_MAX_OPACITY must be greater than zero, got: {CAPTION_MAX_OPACITY}"
-        )
-    return int(percentage / 100 * CAPTION_MAX_OPACITY)
+    return int(percentage / 100 * get_valid_caption_max_opacity())
 
 
 def configure_application() -> None:
@@ -73,7 +66,7 @@ def configure_application() -> None:
         initial_sidebar_state="expanded",
     )
 
-    validate_caption_configuration()
+    get_valid_caption_max_opacity()
     ensure_runtime_directories()
     initialize_database()
 
@@ -670,10 +663,10 @@ def render_tools() -> None:
             return 0.0
         return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / (1024 * 1024)
 
-    def _clear_temp_directory(path: Path, failed: list[str], *, remove_root: bool = False) -> None:
+    def clear_temp_directory(path: Path, failed: list[str], *, remove_root: bool = False) -> None:
         for child in path.iterdir():
             if child.is_dir():
-                _clear_temp_directory(child, failed, remove_root=True)
+                clear_temp_directory(child, failed, remove_root=True)
                 continue
 
             try:
@@ -697,7 +690,7 @@ def render_tools() -> None:
     if st.button("Clear temporary files", disabled=temp_mb == 0):
         failed: list[str] = []
         if TEMP_DIR.exists():
-            _clear_temp_directory(TEMP_DIR, failed)
+            clear_temp_directory(TEMP_DIR, failed)
 
         if failed:
             st.warning("Some files could not be deleted:")
