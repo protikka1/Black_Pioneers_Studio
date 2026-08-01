@@ -1,0 +1,9 @@
+-r requirements.in
+
+pytest
+pytest-cov
+black
+ruff
+mypy
+pre-commit
+ipython

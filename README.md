@@ -4,10 +4,7 @@
 
 **Black Pioneers Studio** is a Streamlit-based project for creating educational short-form videos about Black American pioneers.
 
-The repository currently contains two entry points:
-
-- `backup_app.py` — the working end-to-end pipeline (media upload, narration, captions, render, SQLite history table, and video preview/download).
-- `app.py` — a scaffold-style multi-page UI path that uses a simpler data model and a separate output layout.
+The Streamlit entry point is `app.py`. Shared logic now lives in the `black_pioneers_studio/` package.
 
 The project is designed for the **Black Pioneers: First in American History** educational series.
 
@@ -88,21 +85,18 @@ There is no tracked `database/black_pioneers.db` file in this repository.
 
 ---
 
-## Output Paths by Entry Point
+## Core Modules
 
-### `backup_app.py` (working pipeline)
-
-- Generated MP4s: `generated/<safe_pioneer_name>/<safe_video_title>_<timestamp>.mp4`
-- SQLite database: `database/pioneers.db`
-- Temporary job files: `temp/<job_uuid>/` (cleaned up after generation)
-
-### `app.py` (scaffold-style path)
-
-- Per-pioneer base folder: `output/pioneers/<pioneer_id>_<safe_name>/`
-- Generated MP4s: `<base_folder>/output/short_<safe_name>_<timestamp>.mp4`
-- Related per-pioneer assets: `output/pioneers/<pioneer_id>_<safe_name>/{images,videos,audio,music,captions}/`
-- SQLite database file: `database/pioneers.db` (accessed through helpers in `database/db.py`)
-- Temporary job files: `temp/<job_uuid>/` (cleaned up after generation)
+- `database/connection.py` — SQLite connection setup
+- `database/migrations.py` — schema and migrations
+- `database/pioneer_repository.py` — pioneer persistence
+- `database/video_repository.py` — generated video listing
+- `black_pioneers_studio/media.py` — media files, folders, and image/video prep
+- `black_pioneers_studio/narration.py` — Edge TTS narration
+- `black_pioneers_studio/captions.py` — caption rendering
+- `black_pioneers_studio/rendering.py` — final short generation
+- `black_pioneers_studio/models.py` — shared data types
+- `black_pioneers_studio/paths.py` — project paths and constants
 
 ---
 
@@ -111,12 +105,24 @@ There is no tracked `database/black_pioneers.db` file in this repository.
 ```text
 Black_Pioneers_Studio/
 ├── app.py
-├── backup_app.py
 ├── README.md
 ├── requirements.txt
 ├── LICENSE
 ├── SECURITY.md
 ├── .gitignore
+├── database/
+│   ├── connection.py
+│   ├── migrations.py
+│   ├── pioneer_repository.py
+│   ├── video_repository.py
+│   └── db.py
+├── black_pioneers_studio/
+│   ├── captions.py
+│   ├── media.py
+│   ├── models.py
+│   ├── narration.py
+│   ├── paths.py
+│   └── rendering.py
 ├── assets/
 │   ├── images/
 │   ├── music/
@@ -157,17 +163,77 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Primary run command (current working pipeline):
-
-```bash
-streamlit run backup_app.py
-```
-
-Alternative scaffold UI entry point:
+Primary run command:
 
 ```bash
 streamlit run app.py
 ```
+
+### Local Mac Use (Desktop Launcher)
+
+If you only need local use on macOS, you can run a dedicated launcher that starts
+Streamlit and opens the app automatically in your browser.
+
+Run launcher:
+
+```bash
+source .venv/bin/activate
+python desktop_launcher.py
+```
+
+Build a macOS desktop app bundle (`.app`):
+
+```bash
+bash scripts/build_mac_desktop_app.sh
+```
+
+After build, open:
+
+```text
+dist/Black Pioneers Studio.app
+```
+
+---
+
+## Production Deployment (Fletcher)
+
+This repository is ready to deploy on Fletcher with Streamlit.
+
+### Runtime command
+
+The startup command is defined in `Procfile`:
+
+```text
+web: streamlit run app.py --server.port ${PORT:-8501} --server.address 0.0.0.0
+```
+
+### Streamlit production config
+
+Production server settings are defined in `.streamlit/config.toml`:
+
+- `headless = true`
+- `address = "0.0.0.0"`
+- `port = 8501` (platform port override supported through `PORT`)
+
+### Fletcher requirements checklist
+
+Before go-live, confirm:
+
+1. Install Python dependencies from `requirements.txt`.
+2. `ffmpeg` is available on `PATH` (required by MoviePy rendering).
+3. Writable runtime directories are allowed for:
+   - `temp/`
+   - `output/`
+   - `database/` (SQLite file persistence)
+4. Environment exposes a web port (`PORT`) for the Streamlit process.
+
+### CI validation
+
+GitHub Actions workflow `.github/workflows/ci.yml` validates:
+
+- dependency install
+- `python -m py_compile app.py database/*.py black_pioneers_studio/*.py`
+- smoke tests in `tests/test_streamlit_smoke.py`
 
 ---
 

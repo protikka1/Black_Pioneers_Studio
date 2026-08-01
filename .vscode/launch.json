@@ -9,16 +9,6 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "Python Debugger: Streamlit (backup_app.py)",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "streamlit",
-      "args": ["run", "backup_app.py", "--server.port", "8501"],
-      "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}",
-      "justMyCode": true
-    },
-    {
       "name": "Python Debugger: Streamlit (app.py)",
       "type": "debugpy",
       "request": "launch",

@@ -1,391 +1,59 @@
 from __future__ import annotations
 
-import asyncio
 import csv
 import io
-import re
 import shutil
 import sqlite3
-import textwrap
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-import edge_tts
 import streamlit as st
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
-from moviepy import (
-    AudioFileClip,
-    CompositeAudioClip,
-    CompositeVideoClip,
-    ImageClip,
-    VideoFileClip,
-    concatenate_audioclips,
-    concatenate_videoclips,
-)
 
-from database.db import (
+from black_pioneers_studio.jobs import RenderJobManager
+from database.connection import initialize_database
+from database.pioneer_repository import (
     create_pioneer,
     get_all_pioneers,
-    initialize_database,
     update_pioneer_folder,
 )
-
-BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE_DIR / "output" / "pioneers"
-PIONEERS_OUTPUT_DIR = OUTPUT_DIR
-TEMP_DIR = BASE_DIR / "temp"
-
-PROJECT_TITLE = "Black Pioneers: First in American History"
-WIDTH = 1080
-HEIGHT = 1920
-FPS = 30
-
-SUPPORTED_IMAGES = {".jpg", ".jpeg", ".png", ".webp"}
-SUPPORTED_VIDEOS = {".mp4", ".mov", ".m4v"}
-
-# Caption defaults
-CAPTION_BASE_FONT_SIZE = 68
-CAPTION_BASE_WRAP_WIDTH = 25
-CAPTION_MAX_OPACITY = 255
+from database.video_repository import count_generated_shorts, list_generated_videos
+from black_pioneers_studio.media import (
+    get_or_create_pioneer_folder,
+    make_safe_folder_name,
+    save_uploaded_file,
+)
+from black_pioneers_studio.paths import (
+    CAPTION_MAX_OPACITY,
+    HEIGHT,
+    OUTPUT_DIR,
+    PIONEERS_OUTPUT_DIR,
+    PROJECT_TITLE,
+    TEMP_DIR,
+    ensure_runtime_directories,
+)
+from black_pioneers_studio.rendering import build_render_fingerprint, generate_short
 
 
-def get_caption_wrap_width(font_size: int) -> int:
-    return max(10, int(CAPTION_BASE_WRAP_WIDTH * CAPTION_BASE_FONT_SIZE / font_size))
+@st.cache_resource
+def get_render_job_manager() -> RenderJobManager:
+    return RenderJobManager(max_workers=2)
+
+
+def get_valid_caption_max_opacity() -> int:
+    if CAPTION_MAX_OPACITY <= 0:
+        raise ValueError(
+            f"CAPTION_MAX_OPACITY must be greater than zero, got: {CAPTION_MAX_OPACITY}"
+        )
+    return CAPTION_MAX_OPACITY
 
 
 def opacity_to_percentage(opacity: int) -> int:
-    return int(opacity / CAPTION_MAX_OPACITY * 100)
+    return int(opacity / get_valid_caption_max_opacity() * 100)
 
 
 def percentage_to_opacity(percentage: int) -> int:
-    return int(percentage / 100 * CAPTION_MAX_OPACITY)
-
-
-def make_safe_folder_name(name: str) -> str:
-    safe_name = name.strip().lower()
-    safe_name = re.sub(r"[^a-z0-9]+", "_", safe_name)
-    return safe_name.strip("_")
-
-
-def save_uploaded_file(uploaded_file, destination: Path) -> Path:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-
-    with destination.open("wb") as file:
-        file.write(uploaded_file.getbuffer())
-
-    return destination
-
-
-def count_generated_shorts() -> int:
-    return len(list(PIONEERS_OUTPUT_DIR.rglob("*.mp4")))
-
-
-def get_or_create_pioneer_folder(pioneer: dict[str, object]) -> Path:
-    folder_path = str(pioneer.get("folder_path") or "").strip()
-
-    if folder_path:
-        folder = Path(folder_path)
-    else:
-        pioneer_id = int(pioneer["id"])
-        safe_name = make_safe_folder_name(str(pioneer["name"])) or "pioneer"
-        folder = PIONEERS_OUTPUT_DIR / f"{pioneer_id}_{safe_name}"
-        update_pioneer_folder(pioneer_id=pioneer_id, folder_path=str(folder))
-
-    for subfolder in ["images", "videos", "audio", "music", "captions", "output"]:
-        (folder / subfolder).mkdir(parents=True, exist_ok=True)
-
-    return folder
-
-
-def load_font(size: int):
-    candidates = [
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-    ]
-
-    for candidate in candidates:
-        if Path(candidate).exists():
-            return ImageFont.truetype(candidate, size=size)
-
-    return ImageFont.load_default()
-
-
-def prepare_vertical_image(source_path: Path, destination_path: Path) -> Path:
-    with Image.open(source_path) as source:
-        image = source.convert("RGB")
-
-        # Keep the full source image visible and fill the remaining space with a soft blurred backdrop.
-        background = ImageOps.fit(
-            image,
-            (WIDTH, HEIGHT),
-            method=Image.Resampling.LANCZOS,
-            centering=(0.5, 0.5),
-        )
-        background = ImageEnhance.Brightness(
-            background.filter(ImageFilter.GaussianBlur(radius=30))
-        ).enhance(0.65)
-
-        foreground = ImageOps.contain(
-            image,
-            (WIDTH, HEIGHT),
-            method=Image.Resampling.LANCZOS,
-        )
-
-        canvas = background.copy()
-        offset = (
-            (WIDTH - foreground.width) // 2,
-            (HEIGHT - foreground.height) // 2,
-        )
-        canvas.paste(foreground, offset)
-        canvas.save(destination_path, quality=92, optimize=True)
-
-    return destination_path
-
-
-def split_script_into_captions(script: str, words_per_caption: int = 8) -> list[str]:
-    words = script.replace("\n", " ").split()
-    return [
-        " ".join(words[index:index + words_per_caption])
-        for index in range(0, len(words), words_per_caption)
-    ]
-
-
-def create_caption_image(
-    text: str,
-    destination_path: Path,
-    font_size: int = 68,
-    bg_opacity: int = 185,
-) -> Path:
-    caption_height = 500
-    canvas = Image.new("RGBA", (WIDTH, caption_height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(canvas)
-    font = load_font(font_size)
-    wrapped_text = textwrap.fill(text, width=get_caption_wrap_width(font_size))
-
-    bounding_box = draw.multiline_textbbox(
-        (0, 0),
-        wrapped_text,
-        font=font,
-        spacing=16,
-        align="center",
-        stroke_width=4,
-    )
-
-    text_width = bounding_box[2] - bounding_box[0]
-    text_height = bounding_box[3] - bounding_box[1]
-    text_x = (WIDTH - text_width) // 2
-    text_y = (caption_height - text_height) // 2
-
-    padding = 32
-    background_box = (
-        max(20, text_x - padding),
-        max(20, text_y - padding),
-        min(WIDTH - 20, text_x + text_width + padding),
-        min(caption_height - 20, text_y + text_height + padding),
-    )
-
-    draw.rounded_rectangle(background_box, radius=30, fill=(0, 0, 0, bg_opacity))
-    draw.multiline_text(
-        (text_x, text_y),
-        wrapped_text,
-        font=font,
-        fill=(255, 255, 255, 255),
-        spacing=16,
-        align="center",
-        stroke_width=4,
-        stroke_fill=(0, 0, 0, 255),
-    )
-
-    canvas.save(destination_path)
-    return destination_path
-
-
-def prepare_video_clip(source_path: Path, required_duration: float):
-    clip = VideoFileClip(str(source_path))
-    source_ratio = clip.w / clip.h
-    target_ratio = WIDTH / HEIGHT
-
-    if source_ratio > target_ratio:
-        crop_width = int(clip.h * target_ratio)
-        clip = clip.cropped(x_center=clip.w / 2, width=crop_width)
-    else:
-        crop_height = int(clip.w / target_ratio)
-        clip = clip.cropped(y_center=clip.h / 2, height=crop_height)
-
-    clip = clip.resized(new_size=(WIDTH, HEIGHT))
-
-    if clip.duration >= required_duration:
-        return clip.subclipped(0, required_duration)
-
-    copies_needed = int(required_duration / clip.duration) + 1
-    repeated = concatenate_videoclips([clip for _ in range(copies_needed)], method="compose")
-    return repeated.subclipped(0, required_duration)
-
-
-def create_background_video(asset_paths: list[Path], duration: float, job_directory: Path):
-    duration_per_asset = duration / len(asset_paths)
-    clips = []
-
-    for index, asset_path in enumerate(asset_paths):
-        extension = asset_path.suffix.lower()
-
-        if extension in SUPPORTED_IMAGES:
-            prepared_path = job_directory / f"prepared_image_{index:04d}.jpg"
-            prepare_vertical_image(asset_path, prepared_path)
-            clips.append(ImageClip(str(prepared_path)).with_duration(duration_per_asset))
-        elif extension in SUPPORTED_VIDEOS:
-            clips.append(prepare_video_clip(asset_path, duration_per_asset))
-
-    if not clips:
-        raise ValueError("No supported image or video assets were found.")
-
-    return concatenate_videoclips(clips, method="compose").with_duration(duration)
-
-
-def create_caption_clips(
-    script: str,
-    duration: float,
-    captions_directory: Path,
-    words_per_caption: int = 8,
-    caption_y: int = 1250,
-    font_size: int = 68,
-    bg_opacity: int = 185,
-):
-    captions = split_script_into_captions(script, words_per_caption)
-
-    if not captions:
-        return []
-
-    caption_duration = duration / len(captions)
-    caption_clips = []
-
-    for index, caption_text in enumerate(captions):
-        caption_path = captions_directory / f"caption_{index:04d}.png"
-        create_caption_image(caption_text, caption_path, font_size=font_size, bg_opacity=bg_opacity)
-
-        caption_clips.append(
-            ImageClip(str(caption_path))
-            .with_start(index * caption_duration)
-            .with_duration(caption_duration)
-            .with_position(("center", caption_y))
-        )
-
-    return caption_clips
-
-
-async def generate_narration_async(text: str, voice: str, output_path: Path, rate: str) -> None:
-    communication = edge_tts.Communicate(text=text, voice=voice, rate=rate)
-    await communication.save(str(output_path))
-
-
-def generate_narration(text: str, voice: str, output_path: Path, rate: str) -> None:
-    asyncio.run(
-        generate_narration_async(
-            text=text,
-            voice=voice,
-            output_path=output_path,
-            rate=rate,
-        )
-    )
-
-
-def create_final_audio(
-    narration_path: Path,
-    music_path: Path | None,
-    duration: float,
-    music_volume: float,
-):
-    narration = AudioFileClip(str(narration_path))
-
-    if not music_path:
-        return narration
-
-    music = AudioFileClip(str(music_path))
-
-    if music.duration < duration:
-        copies_needed = int(duration / music.duration) + 1
-        music = concatenate_audioclips([music for _ in range(copies_needed)])
-
-    music = music.subclipped(0, duration).with_volume_scaled(music_volume)
-    return CompositeAudioClip([music, narration])
-
-
-def generate_short(
-    pioneer_name: str,
-    script: str,
-    asset_paths: list[Path],
-    music_path: Path | None,
-    voice: str,
-    narration_rate: int,
-    music_volume: float,
-    pioneer_folder: Path,
-    job_directory: Path,
-    words_per_caption: int = 8,
-    caption_y: int = 1250,
-    caption_font_size: int = 68,
-    caption_bg_opacity: int = 185,
-) -> tuple[Path, float]:
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    narration_output = pioneer_folder / "audio" / f"narration_{timestamp}.mp3"
-
-    generate_narration(
-        text=script,
-        voice=voice,
-        output_path=narration_output,
-        rate=f"{narration_rate:+d}%",
-    )
-
-    narration_clip = AudioFileClip(str(narration_output))
-    duration = narration_clip.duration
-    narration_clip.close()
-
-    background_video = create_background_video(asset_paths, duration, job_directory)
-    caption_clips = create_caption_clips(
-        script,
-        duration,
-        pioneer_folder / "captions",
-        words_per_caption=words_per_caption,
-        caption_y=caption_y,
-        font_size=caption_font_size,
-        bg_opacity=caption_bg_opacity,
-    )
-
-    final_video = CompositeVideoClip([background_video, *caption_clips], size=(WIDTH, HEIGHT))
-    final_video = final_video.with_duration(duration)
-
-    final_audio = create_final_audio(
-        narration_path=narration_output,
-        music_path=music_path,
-        duration=duration,
-        music_volume=music_volume,
-    )
-
-    output_file = pioneer_folder / "output" / f"short_{make_safe_folder_name(pioneer_name)}_{timestamp}.mp4"
-
-    try:
-        final_video.with_audio(final_audio).write_videofile(
-            str(output_file),
-            fps=FPS,
-            codec="libx264",
-            audio_codec="aac",
-            bitrate="7000k",
-            audio_bitrate="192k",
-            preset="medium",
-            threads=4,
-        )
-    finally:
-        final_video.close()
-        background_video.close()
-        final_audio.close()
-
-    return output_file, duration
-
-
-def list_generated_videos() -> list[Path]:
-    videos = list(PIONEERS_OUTPUT_DIR.rglob("*.mp4"))
-    return sorted(videos, key=lambda path: path.stat().st_mtime, reverse=True)
+    return int(percentage / 100 * get_valid_caption_max_opacity())
 
 
 def configure_application() -> None:
@@ -398,9 +66,8 @@ def configure_application() -> None:
         initial_sidebar_state="expanded",
     )
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    TEMP_DIR.mkdir(parents=True, exist_ok=True)
-
+    get_valid_caption_max_opacity()
+    ensure_runtime_directories()
     initialize_database()
 
 
@@ -409,6 +76,34 @@ def render_sidebar() -> str:
 
     st.sidebar.title("Black Pioneers Studio")
     st.sidebar.caption(PROJECT_TITLE)
+
+    pioneers = get_all_pioneers()
+    if pioneers:
+        pioneer_by_name: dict[str, dict[str, object]] = {
+            str(pioneer["name"]): pioneer
+            for pioneer in pioneers
+        }
+        pioneer_names = sorted(pioneer_by_name.keys())
+
+        default_name = st.session_state.get("selected_pioneer_name")
+        default_index = 0
+        if default_name in pioneer_names:
+            default_index = pioneer_names.index(default_name)
+
+        selected_name = st.sidebar.selectbox(
+            "Pioneers collection",
+            options=pioneer_names,
+            index=default_index,
+            help="Choose a saved pioneer profile.",
+            key="sidebar_pioneer_selector",
+        )
+
+        st.session_state["selected_pioneer_name"] = selected_name
+        st.session_state["selected_pioneer_id"] = int(
+            str(pioneer_by_name[selected_name]["id"])
+        )
+    else:
+        st.sidebar.info("No pioneers yet. Add one from Create Pioneer.")
 
     return st.sidebar.radio(
         "Navigation",
@@ -444,14 +139,74 @@ def render_dashboard() -> None:
         st.info("No pioneers have been added yet.")
         return
 
-    for pioneer in pioneers:
+    pioneer_by_name: dict[str, dict[str, object]] = {
+        str(pioneer["name"]): pioneer
+        for pioneer in pioneers
+    }
+    pioneer_names = sorted(pioneer_by_name.keys())
+
+    default_name = st.session_state.get("selected_pioneer_name")
+    default_index = 0
+    if default_name in pioneer_names:
+        default_index = pioneer_names.index(default_name)
+
+    selected_name = st.selectbox(
+        "Pioneers collection",
+        options=pioneer_names,
+        index=default_index,
+        help="Choose a saved pioneer profile.",
+        key="dashboard_pioneer_selector",
+    )
+    if selected_name is None:
+        return
+
+    selected_pioneer = pioneer_by_name[selected_name]
+    st.session_state["selected_pioneer_name"] = selected_name
+    st.session_state["selected_pioneer_id"] = int(str(selected_pioneer["id"]))
+
+    show_preview = st.checkbox(
+        "Show selected pioneer preview",
+        value=st.session_state.get("dashboard_show_preview", False),
+        key="dashboard_show_preview",
+    )
+
+    if show_preview:
+        st.caption("Selected pioneer preview")
         with st.container(border=True):
-            st.markdown(f"### {pioneer['name']}")
+            st.markdown(f"### {selected_pioneer['name']}")
 
-            if pioneer["achievement"]:
-                st.write(pioneer["achievement"])
+            if selected_pioneer["achievement"]:
+                st.write(selected_pioneer["achievement"])
 
-            st.caption(f"Category: {pioneer['category'] or 'Not specified'}")
+            st.caption(f"Category: {selected_pioneer['category'] or 'Not specified'}")
+
+            if selected_pioneer.get("biography"):
+                with st.expander("Biography"):
+                    st.write(str(selected_pioneer["biography"]).strip())
+
+        st.divider()
+
+    st.caption("Pioneer collection")
+
+    collection_rows = []
+    for pioneer in pioneers:
+        if show_preview and int(str(pioneer["id"])) == st.session_state["selected_pioneer_id"]:
+            continue
+
+        achievement = str(pioneer.get("achievement") or "").strip()
+        if len(achievement) > 90:
+            achievement = f"{achievement[:87]}..."
+
+        collection_rows.append(
+            {
+                "Name": str(pioneer["name"]),
+                "Category": str(pioneer.get("category") or "Not specified"),
+                "Achievement": achievement or "-",
+            }
+        )
+
+    if collection_rows:
+        st.dataframe(collection_rows, hide_index=True)
 
 
 def render_create_pioneer() -> None:
@@ -515,15 +270,38 @@ def render_create_short() -> None:
     """Render the Short creation workflow with full video generation."""
 
     st.title("Create YouTube Short")
+    job_manager = get_render_job_manager()
     pioneers = get_all_pioneers()
 
     if not pioneers:
         st.warning("Create at least one pioneer before generating a video.")
         return
 
-    pioneer_by_name = {pioneer["name"]: pioneer for pioneer in pioneers}
+    pioneer_by_name: dict[str, dict[str, object]] = {
+        str(pioneer["name"]): pioneer
+        for pioneer in pioneers
+    }
+    pioneer_names = sorted(pioneer_by_name.keys())
 
-    selected_name = st.selectbox("Select pioneer", options=list(pioneer_by_name.keys()))
+    default_name = st.session_state.get("selected_pioneer_name")
+    default_index = 0
+    if default_name in pioneer_names:
+        default_index = pioneer_names.index(default_name)
+
+    selected_name = st.selectbox(
+        "Pioneers collection",
+        options=pioneer_names,
+        index=default_index,
+        help="Choose a saved pioneer profile.",
+    )
+    if selected_name is None:
+        st.warning("Select a pioneer to continue.")
+        return
+
+    st.session_state["selected_pioneer_name"] = selected_name
+    st.session_state["selected_pioneer_id"] = int(
+        str(pioneer_by_name[selected_name]["id"])
+    )
 
     script = st.text_area(
         "Narration script",
@@ -580,7 +358,77 @@ def render_create_short() -> None:
 
     st.checkbox("Generate automatic captions", value=True, disabled=True)
 
-    if st.button("Generate Short", type="primary"):
+    current_form_signature = (
+        selected_name,
+        script.strip(),
+        voice,
+        narration_rate,
+        round(music_volume, 4),
+        tuple((uploaded.name, uploaded.size) for uploaded in (images or [])),
+        tuple((uploaded.name, uploaded.size) for uploaded in (video_assets or [])),
+        (music.name, music.size) if music else None,
+    )
+
+    active_job_id = st.session_state.get("active_render_job_id")
+    active_job = job_manager.get_job(active_job_id) if active_job_id else None
+    job_is_active = active_job is not None and active_job.status in {"queued", "running"}
+    preview_signature = st.session_state.get("active_render_preview_signature")
+
+    if (
+        active_job is not None
+        and active_job.status in {"completed", "failed"}
+        and preview_signature is not None
+        and preview_signature != current_form_signature
+    ):
+        st.session_state.pop("active_render_job_id", None)
+        st.session_state.pop("active_render_preview_signature", None)
+        active_job = None
+        job_is_active = False
+
+    if active_job is not None:
+        st.caption(f"Render job: {active_job.job_id}")
+        st.progress(active_job.progress, text=f"Status: {active_job.status}")
+        if st.button("Clear Preview", key="clear_render_preview"):
+            st.session_state.pop("active_render_job_id", None)
+            st.session_state.pop("active_render_preview_signature", None)
+            st.rerun()
+
+        if active_job.status == "completed" and active_job.output_path is not None:
+            output_path = active_job.output_path
+            st.success("Short created successfully.")
+            st.video(str(output_path))
+            with output_path.open("rb") as file:
+                st.download_button(
+                    label="Download MP4",
+                    data=file.read(),
+                    file_name=output_path.name,
+                    mime="video/mp4",
+                    use_container_width=True,
+                )
+            st.code(str(output_path))
+            if st.button("Clear Completed Job"):
+                st.session_state.pop("active_render_job_id", None)
+                st.session_state.pop("active_render_preview_signature", None)
+                st.rerun()
+        elif active_job.status == "failed":
+            error_message = active_job.error_message or "Unknown rendering error."
+            st.error(f"Unable to generate short: {error_message}")
+            if "readable duration" in error_message:
+                st.info(
+                    "One of the uploaded videos appears unreadable or has no duration. "
+                    "Try another video file or convert it to MP4 (H.264 + AAC)."
+                )
+            if "ffmpeg" in error_message.lower():
+                st.info("FFmpeg is required for video rendering and must be installed on your system.")
+            if st.button("Clear Failed Job"):
+                st.session_state.pop("active_render_job_id", None)
+                st.session_state.pop("active_render_preview_signature", None)
+                st.rerun()
+        else:
+            st.info("Rendering in background. Use Refresh while this page remains responsive.")
+            st.button("Refresh Job Status", key="refresh_render_job_status")
+
+    if st.button("Generate Short", type="primary", disabled=job_is_active):
         if not script.strip():
             st.error("A narration script is required.")
             return
@@ -591,67 +439,83 @@ def render_create_short() -> None:
 
         selected_pioneer = pioneer_by_name[selected_name]
         pioneer_folder = get_or_create_pioneer_folder(selected_pioneer)
+        selected_pioneer_id = int(str(selected_pioneer["id"]))
 
         uploaded_assets = [*(images or []), *(video_assets or [])]
+        words_per_caption = st.session_state.get("caption_words_per_caption", 8)
+        caption_y = st.session_state.get("caption_y_position", 1250)
+        caption_font_size = st.session_state.get("caption_font_size", 68)
+        caption_bg_opacity = st.session_state.get("caption_bg_opacity", 185)
 
         job_directory = TEMP_DIR / uuid.uuid4().hex
         job_directory.mkdir(parents=True, exist_ok=True)
 
         try:
-            with st.status("Generating YouTube Short...", expanded=True):
-                st.write("Saving uploaded assets...")
+            asset_paths = []
+            for index, uploaded in enumerate(uploaded_assets):
+                asset_stem = make_safe_folder_name(Path(uploaded.name).stem) or f"asset_{index:04d}"
+                destination = job_directory / f"asset_{index:04d}_{asset_stem}{Path(uploaded.name).suffix.lower()}"
+                asset_paths.append(save_uploaded_file(uploaded, destination))
 
-                asset_paths = []
-                for index, uploaded in enumerate(uploaded_assets):
-                    asset_stem = make_safe_folder_name(Path(uploaded.name).stem) or f"asset_{index:04d}"
-                    destination = job_directory / f"asset_{index:04d}_{asset_stem}{Path(uploaded.name).suffix.lower()}"
-                    asset_paths.append(save_uploaded_file(uploaded, destination))
+            saved_music_path = None
+            if music:
+                music_stem = make_safe_folder_name(Path(music.name).stem) or "music"
+                music_destination = pioneer_folder / "music" / (
+                    f"{music_stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{Path(music.name).suffix.lower()}"
+                )
+                saved_music_path = save_uploaded_file(music, music_destination)
 
-                saved_music_path = None
-                if music:
-                    music_stem = make_safe_folder_name(Path(music.name).stem) or "music"
-                    music_destination = pioneer_folder / "music" / (
-                        f"{music_stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{Path(music.name).suffix.lower()}"
+            request_key = build_render_fingerprint(
+                pioneer_name=selected_name,
+                script=script.strip(),
+                asset_paths=asset_paths,
+                music_path=saved_music_path,
+                voice=voice,
+                narration_rate=narration_rate,
+                music_volume=music_volume,
+                words_per_caption=words_per_caption,
+                caption_y=caption_y,
+                caption_font_size=caption_font_size,
+                caption_bg_opacity=caption_bg_opacity,
+            )
+
+            def render_task(report_progress):
+                try:
+                    report_progress(0.15)
+                    output_path, _duration = generate_short(
+                        pioneer_name=selected_name,
+                        script=script.strip(),
+                        asset_paths=asset_paths,
+                        music_path=saved_music_path,
+                        voice=voice,
+                        narration_rate=narration_rate,
+                        music_volume=music_volume,
+                        pioneer_folder=pioneer_folder,
+                        job_directory=job_directory,
+                        words_per_caption=words_per_caption,
+                        caption_y=caption_y,
+                        caption_font_size=caption_font_size,
+                        caption_bg_opacity=caption_bg_opacity,
                     )
-                    saved_music_path = save_uploaded_file(music, music_destination)
+                    report_progress(0.95)
+                    return output_path
+                finally:
+                    shutil.rmtree(job_directory, ignore_errors=True)
 
-                st.write("Rendering video and audio...")
-
-                output_path, duration = generate_short(
-                    pioneer_name=selected_name,
-                    script=script.strip(),
-                    asset_paths=asset_paths,
-                    music_path=saved_music_path,
-                    voice=voice,
-                    narration_rate=narration_rate,
-                    music_volume=music_volume,
-                    pioneer_folder=pioneer_folder,
-                    job_directory=job_directory,
-                    words_per_caption=st.session_state.get("caption_words_per_caption", 8),
-                    caption_y=st.session_state.get("caption_y_position", 1250),
-                    caption_font_size=st.session_state.get("caption_font_size", 68),
-                    caption_bg_opacity=st.session_state.get("caption_bg_opacity", 185),
-                )
-
-            st.success(f"Short created successfully in {duration:.1f} seconds.")
-            st.video(str(output_path))
-
-            with output_path.open("rb") as file:
-                st.download_button(
-                    label="Download MP4",
-                    data=file.read(),
-                    file_name=output_path.name,
-                    mime="video/mp4",
-                    use_container_width=True,
-                )
-
-            st.code(str(output_path))
-
+            job = job_manager.run_render_job(
+                pioneer_id=selected_pioneer_id,
+                task=render_task,
+                request_key=request_key,
+            )
+            st.session_state["active_render_job_id"] = job.job_id
+            if job.status in {"queued", "running"}:
+                st.success(f"Render job queued: {job.job_id}")
+            else:
+                st.success(f"Reusing existing render job: {job.job_id}")
+            st.session_state["active_render_preview_signature"] = current_form_signature
+            st.rerun()
         except Exception as exc:
             st.error(f"Unable to generate short: {exc}")
-            if "ffmpeg" in str(exc).lower():
-                st.info("FFmpeg is required for video rendering and must be installed on your system.")
-        finally:
             shutil.rmtree(job_directory, ignore_errors=True)
 
 
@@ -799,35 +663,38 @@ def render_tools() -> None:
             return 0.0
         return sum(f.stat().st_size for f in path.rglob("*") if f.is_file()) / (1024 * 1024)
 
+    def clear_temp_directory(path: Path, failed: list[str], *, remove_root: bool = False) -> None:
+        for child in path.iterdir():
+            if child.is_dir():
+                clear_temp_directory(child, failed, remove_root=True)
+                continue
+
+            try:
+                child.unlink()
+            except OSError as exc:
+                failed.append(f"{child.relative_to(TEMP_DIR)}: {exc}")
+
+        if remove_root:
+            try:
+                path.rmdir()
+            except OSError as exc:
+                failed.append(f"{path.relative_to(TEMP_DIR)}: {exc}")
+
     temp_mb = _dir_size_mb(TEMP_DIR)
-    temp_files = [path for path in TEMP_DIR.rglob("*") if path.is_file()] if TEMP_DIR.exists() else []
     generated_count = len(list(PIONEERS_OUTPUT_DIR.rglob("*.mp4"))) if PIONEERS_OUTPUT_DIR.exists() else 0
 
     col3, col4 = st.columns(2)
     col3.metric("Temp directory size", f"{temp_mb:.1f} MB")
     col4.metric("Generated videos", generated_count)
 
-    if st.button("Clear temporary files", disabled=not temp_files):
+    if st.button("Clear temporary files", disabled=temp_mb == 0):
         failed: list[str] = []
-
-        for temp_file in temp_files:
-            try:
-                temp_file.unlink()
-            except OSError as exc:
-                failed.append(f"{temp_file.name}: {exc}")
-
-        temp_directories = sorted(
-            (path for path in TEMP_DIR.rglob("*") if path.is_dir()),
-            reverse=True,
-        )
-        for temp_directory in temp_directories:
-            try:
-                temp_directory.rmdir()
-            except OSError:
-                continue
+        if TEMP_DIR.exists():
+            clear_temp_directory(TEMP_DIR, failed)
 
         if failed:
-            st.warning("Some files could not be deleted:\n" + "\n".join(failed))
+            st.warning("Some files could not be deleted:")
+            st.text("\n".join(failed))
         else:
             st.success("Temporary files cleared.")
         st.rerun()
