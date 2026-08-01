@@ -23,7 +23,7 @@
     {
       "label": "📲 Install APK on Emulator",
       "type": "shell",
-      "command": "/Users/za914/Downloads/platform-tools/adb",
+      "command": "adb",
       "args": ["install", "-r", "${workspaceFolder}/bin/${input:apkFile}"],
       "problemMatcher": [],
       "presentation": {
