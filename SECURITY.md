@@ -20,3 +20,9 @@ Include a description, reproduction steps, affected components, possible impact,
 ## Sensitive Information
 
 Do not include passwords, API keys, access tokens, private certificates, personal information, databases, unauthorized media, or `.env` file contents in reports, commits, issues, or pull requests.
+
+## Automated Security Checks
+
+Pull requests and changes to `main` are checked with CodeQL, Bandit, and
+`pip-audit`. Generated `build/` and `dist/` bundles are intentionally excluded
+from version control and must be rebuilt from reviewed source code.

@@ -22,6 +22,12 @@ assets/video/*
 
 output/
 
+# Generated desktop bundles and PyInstaller output must be produced by CI or
+# locally. Committing them hides their provenance and makes security review
+# unnecessarily difficult.
+build/
+dist/
+
 # Kivy/Buildozer Android artifacts (not used by this project)
 .buildozer/
 buildozer.spec
