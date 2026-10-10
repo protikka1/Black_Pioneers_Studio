@@ -11,6 +11,7 @@ from .paths import CAPTION_BASE_FONT_SIZE, CAPTION_BASE_WRAP_WIDTH, CAPTION_MAX_
 
 def load_font(size: int):
     candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
@@ -20,7 +21,7 @@ def load_font(size: int):
         if Path(candidate).exists():
             return ImageFont.truetype(candidate, size=size)
 
-    return ImageFont.load_default()
+    return ImageFont.load_default(size=size)
 
 
 def split_script_into_captions(script: str, words_per_caption: int = 8) -> list[str]:

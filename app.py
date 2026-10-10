@@ -447,76 +447,77 @@ def render_create_short() -> None:
         caption_font_size = st.session_state.get("caption_font_size", 68)
         caption_bg_opacity = st.session_state.get("caption_bg_opacity", 185)
 
-        job_directory = TEMP_DIR / uuid.uuid4().hex
-        job_directory.mkdir(parents=True, exist_ok=True)
+        with job_manager.prepare_workspace():
+            job_directory = TEMP_DIR / uuid.uuid4().hex
+            job_directory.mkdir(parents=True, exist_ok=True)
 
-        try:
-            asset_paths = []
-            for index, uploaded in enumerate(uploaded_assets):
-                asset_stem = make_safe_folder_name(Path(uploaded.name).stem) or f"asset_{index:04d}"
-                destination = job_directory / f"asset_{index:04d}_{asset_stem}{Path(uploaded.name).suffix.lower()}"
-                asset_paths.append(save_uploaded_file(uploaded, destination))
+            try:
+                asset_paths = []
+                for index, uploaded in enumerate(uploaded_assets):
+                    asset_stem = make_safe_folder_name(Path(uploaded.name).stem) or f"asset_{index:04d}"
+                    destination = job_directory / f"asset_{index:04d}_{asset_stem}{Path(uploaded.name).suffix.lower()}"
+                    asset_paths.append(save_uploaded_file(uploaded, destination))
 
-            saved_music_path = None
-            if music:
-                music_stem = make_safe_folder_name(Path(music.name).stem) or "music"
-                music_destination = pioneer_folder / "music" / (
-                    f"{music_stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{Path(music.name).suffix.lower()}"
-                )
-                saved_music_path = save_uploaded_file(music, music_destination)
-
-            request_key = build_render_fingerprint(
-                pioneer_name=selected_name,
-                script=script.strip(),
-                asset_paths=asset_paths,
-                music_path=saved_music_path,
-                voice=voice,
-                narration_rate=narration_rate,
-                music_volume=music_volume,
-                words_per_caption=words_per_caption,
-                caption_y=caption_y,
-                caption_font_size=caption_font_size,
-                caption_bg_opacity=caption_bg_opacity,
-            )
-
-            def render_task(report_progress):
-                try:
-                    report_progress(0.15)
-                    output_path, _duration = generate_short(
-                        pioneer_name=selected_name,
-                        script=script.strip(),
-                        asset_paths=asset_paths,
-                        music_path=saved_music_path,
-                        voice=voice,
-                        narration_rate=narration_rate,
-                        music_volume=music_volume,
-                        pioneer_folder=pioneer_folder,
-                        job_directory=job_directory,
-                        words_per_caption=words_per_caption,
-                        caption_y=caption_y,
-                        caption_font_size=caption_font_size,
-                        caption_bg_opacity=caption_bg_opacity,
+                saved_music_path = None
+                if music:
+                    music_stem = make_safe_folder_name(Path(music.name).stem) or "music"
+                    music_destination = pioneer_folder / "music" / (
+                        f"{music_stem}_{uuid.uuid4().hex}{Path(music.name).suffix.lower()}"
                     )
-                    report_progress(0.95)
-                    return output_path
-                finally:
-                    shutil.rmtree(job_directory, ignore_errors=True)
+                    saved_music_path = save_uploaded_file(music, music_destination)
 
-            job = job_manager.run_render_job(
-                pioneer_id=selected_pioneer_id,
-                task=render_task,
-                request_key=request_key,
-            )
-            st.session_state["active_render_job_id"] = job.job_id
-            if job.status in {"queued", "running"}:
-                st.success(f"Render job queued: {job.job_id}")
-            else:
-                st.success(f"Reusing existing render job: {job.job_id}")
-            st.session_state["active_render_preview_signature"] = current_form_signature
-            st.rerun()
-        except Exception as exc:
-            st.error(f"Unable to generate short: {exc}")
-            shutil.rmtree(job_directory, ignore_errors=True)
+                request_key = build_render_fingerprint(
+                    pioneer_name=selected_name,
+                    script=script.strip(),
+                    asset_paths=asset_paths,
+                    music_path=saved_music_path,
+                    voice=voice,
+                    narration_rate=narration_rate,
+                    music_volume=music_volume,
+                    words_per_caption=words_per_caption,
+                    caption_y=caption_y,
+                    caption_font_size=caption_font_size,
+                    caption_bg_opacity=caption_bg_opacity,
+                )
+
+                def render_task(report_progress):
+                    try:
+                        report_progress(0.15)
+                        output_path, _duration = generate_short(
+                            pioneer_name=selected_name,
+                            script=script.strip(),
+                            asset_paths=asset_paths,
+                            music_path=saved_music_path,
+                            voice=voice,
+                            narration_rate=narration_rate,
+                            music_volume=music_volume,
+                            pioneer_folder=pioneer_folder,
+                            job_directory=job_directory,
+                            words_per_caption=words_per_caption,
+                            caption_y=caption_y,
+                            caption_font_size=caption_font_size,
+                            caption_bg_opacity=caption_bg_opacity,
+                        )
+                        report_progress(0.95)
+                        return output_path
+                    finally:
+                        shutil.rmtree(job_directory, ignore_errors=True)
+
+                job = job_manager.run_render_job(
+                    pioneer_id=selected_pioneer_id,
+                    task=render_task,
+                    request_key=request_key,
+                )
+                st.session_state["active_render_job_id"] = job.job_id
+                if job.status in {"queued", "running"}:
+                    st.success(f"Render job queued: {job.job_id}")
+                else:
+                    st.success(f"Reusing existing render job: {job.job_id}")
+                st.session_state["active_render_preview_signature"] = current_form_signature
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Unable to generate short: {exc}")
+                shutil.rmtree(job_directory, ignore_errors=True)
 
 
 def render_video_library() -> None:
@@ -555,7 +556,7 @@ def render_settings() -> None:
     st.text_input("Temporary directory", value=str(TEMP_DIR), disabled=True)
 
     st.selectbox("Default resolution", ["1080x1920"], disabled=True)
-    st.selectbox("Default frame rate", [30, 24, 60], index=0)
+    st.selectbox("Default frame rate", [30], disabled=True)
 
 
 def render_tools() -> None:
@@ -687,10 +688,20 @@ def render_tools() -> None:
     col3.metric("Temp directory size", f"{temp_mb:.1f} MB")
     col4.metric("Generated videos", generated_count)
 
-    if st.button("Clear temporary files", disabled=temp_mb == 0):
+    job_manager = get_render_job_manager()
+    jobs_active = job_manager.has_active_jobs()
+    if jobs_active:
+        st.caption("Temporary cleanup is unavailable while videos are queued or rendering.")
+
+    if st.button("Clear temporary files", disabled=temp_mb == 0 or jobs_active):
         failed: list[str] = []
-        if TEMP_DIR.exists():
-            clear_temp_directory(TEMP_DIR, failed)
+        def cleanup() -> None:
+            if TEMP_DIR.exists():
+                clear_temp_directory(TEMP_DIR, failed)
+
+        if not job_manager.clean_workspace_if_idle(cleanup):
+            st.warning("Wait for active renders to finish before clearing temporary files.")
+            return
 
         if failed:
             st.warning("Some files could not be deleted:")

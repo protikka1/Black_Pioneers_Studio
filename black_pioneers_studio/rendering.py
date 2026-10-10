@@ -7,6 +7,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from moviepy import (
     AudioFileClip,
@@ -201,8 +202,11 @@ def generate_short(
         return cached_output_path, _probe_video_duration(cached_output_path)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    narration_output = pioneer_folder / "audio" / f"narration_{timestamp}.mp3"
-    output_file = pioneer_folder / "output" / f"short_{make_safe_folder_name(pioneer_name)}_{timestamp}.mp4"
+    render_id = f"{timestamp}_{uuid4().hex}"
+    narration_output = pioneer_folder / "audio" / f"narration_{render_id}.mp3"
+    output_file = pioneer_folder / "output" / f"short_{make_safe_folder_name(pioneer_name)}_{render_id}.mp4"
+    captions_directory = job_directory / "captions"
+    captions_directory.mkdir(parents=True, exist_ok=True)
 
     narration_clip: AudioFileClip | None = None
     background_video = None
@@ -229,7 +233,7 @@ def generate_short(
         caption_clips = create_caption_clips(
             script,
             duration,
-            pioneer_folder / "captions",
+            captions_directory,
             words_per_caption=words_per_caption,
             caption_y=caption_y,
             font_size=caption_font_size,
@@ -252,6 +256,7 @@ def generate_short(
             fps=FPS,
             codec="libx264",
             audio_codec="aac",
+            temp_audiofile=str(job_directory / f"mixed_audio_{render_id}.m4a"),
             bitrate="7000k",
             audio_bitrate="192k",
             preset="medium",

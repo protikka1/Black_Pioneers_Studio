@@ -35,7 +35,7 @@ class _FakeVideoClip:
 
 
 class OutputPathTests(unittest.TestCase):
-    def test_generate_short_uses_safe_filename_and_timestamp(self) -> None:
+    def test_generate_short_uses_safe_filename_and_unique_render_id(self) -> None:
         fixed_time = datetime(2026, 7, 26, 18, 7, 55)
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -46,6 +46,15 @@ class OutputPathTests(unittest.TestCase):
             job_directory.mkdir()
 
             fake_video = _FakeVideoClip()
+            caption_directories = []
+            narration_paths = []
+
+            def captions(_script, _duration, directory, **_kwargs):
+                caption_directories.append(directory)
+                return []
+
+            def narration(**kwargs):
+                narration_paths.append(kwargs["output_path"])
 
             with patch("black_pioneers_studio.rendering.datetime") as mocked_datetime, patch(
                 "black_pioneers_studio.rendering.AudioFileClip",
@@ -55,7 +64,7 @@ class OutputPathTests(unittest.TestCase):
                 return_value=fake_video,
             ), patch(
                 "black_pioneers_studio.rendering.create_caption_clips",
-                return_value=[],
+                side_effect=captions,
             ), patch(
                 "black_pioneers_studio.rendering.create_final_audio",
                 return_value=(_FakeAudioClip(), [_FakeAudioClip()]),
@@ -64,7 +73,7 @@ class OutputPathTests(unittest.TestCase):
                 return_value=fake_video,
             ), patch(
                 "black_pioneers_studio.rendering.generate_narration",
-                return_value=None,
+                side_effect=narration,
             ):
                 mocked_datetime.now.return_value = fixed_time
                 output_path, _duration = generate_short(
@@ -79,10 +88,19 @@ class OutputPathTests(unittest.TestCase):
                     job_directory=job_directory,
                 )
 
-        self.assertEqual(
-            output_path,
-            pioneer_folder / "output" / "short_hiram_revels_20260726_180755.mp4",
-        )
+                second_path, _ = generate_short(
+                    pioneer_name="Hiram Revels", script="a different script",
+                    asset_paths=[root / "input.png"], music_path=None,
+                    voice="en-US-GuyNeural", narration_rate=0, music_volume=0.1,
+                    pioneer_folder=pioneer_folder, job_directory=root / "second-job",
+                )
+
+        self.assertEqual(output_path.parent, pioneer_folder / "output")
+        self.assertTrue(output_path.name.startswith("short_hiram_revels_20260726_180755_"))
+        self.assertNotEqual(output_path, second_path)
+        self.assertNotEqual(narration_paths[0], narration_paths[1])
+        self.assertEqual(caption_directories[0], job_directory / "captions")
+        self.assertNotEqual(caption_directories[0], caption_directories[1])
 
     def test_generate_short_reuses_cached_output_instead_of_regenerating(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

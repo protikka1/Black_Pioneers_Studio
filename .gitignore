@@ -25,3 +25,7 @@ output/
 # Kivy/Buildozer Android artifacts (not used by this project)
 .buildozer/
 buildozer.spec
+
+# Generated desktop application artifacts
+build/
+dist/
