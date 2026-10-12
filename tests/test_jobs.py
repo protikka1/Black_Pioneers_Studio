@@ -8,6 +8,26 @@ from black_pioneers_studio.jobs import RenderJobManager
 
 
 class RenderJobManagerTests(unittest.TestCase):
+    def test_full_queue_rejects_new_work_and_still_reuses_existing_request(self):
+        manager = RenderJobManager(max_workers=1, max_pending_jobs=1)
+        release = Event()
+        started = Event()
+
+        def task(_progress):
+            started.set()
+            release.wait(timeout=5)
+            return Path("/tmp/output.mp4")
+
+        try:
+            job = manager.run_render_job(1, task, request_key="existing")
+            self.assertTrue(started.wait(timeout=2))
+            with self.assertRaisesRegex(RuntimeError, "queue is full"):
+                manager.run_render_job(2, task, request_key="new")
+            self.assertEqual(manager.run_render_job(1, task, request_key="existing").job_id, job.job_id)
+        finally:
+            release.set()
+            manager._executor.shutdown(wait=True)
+
     def test_cleanup_waits_for_queued_and_running_jobs(self) -> None:
         manager = RenderJobManager(max_workers=1)
         release = Event()

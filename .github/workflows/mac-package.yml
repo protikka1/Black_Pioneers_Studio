@@ -1,0 +1,49 @@
+name: Mac package
+
+on:
+  pull_request:
+    paths:
+      - '**.py'
+      - '**.spec'
+      - 'requirements*.txt'
+      - 'scripts/**'
+      - '.github/workflows/mac-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and verify ${{ matrix.arch }} DMG
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x86_64
+          - runner: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Create build environment
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements.txt -r requirements-mac-build.txt
+      - name: Select precompiled FFmpeg
+        run: |
+          echo "BLACK_PIONEERS_FFMPEG=$(.venv/bin/python -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')" >> "$GITHUB_ENV"
+      - name: Build and verify app and DMG
+        run: bash scripts/build_mac_dmg.sh
+      - name: Save unsigned test installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Black-Pioneers-Studio-macos-${{ matrix.arch }}
+          path: dist/*.dmg
+          if-no-files-found: error
+          retention-days: 14

@@ -210,9 +210,15 @@ continue using their repository directory unless `BLACK_PIONEERS_DATA_DIR` is se
 
 Diagnostics: `~/Library/Logs/BlackPioneersStudio.log`. The build-time verifier runs
 from a temporary directory with Python, virtual-environment variables, and Homebrew
-removed from PATH, checks imports and FFmpeg, and starts the packaged web server.
+removed from PATH, checks imports and FFmpeg, renders a short test video with captions and local audio,
+and starts the packaged web server.
 No build is reported as verified if these checks fail. To stop the desktop server,
 quit its launcher; closing the browser tab alone does not stop the launcher.
+
+GitHub Actions also builds unsigned Intel and Apple Silicon test installers through
+`.github/workflows/mac-package.yml`. Download these from a successful run's Artifacts.
+Those runners use macOS 15; they do not certify compatibility with Monterey 12.
+Run the local build/verification command on Monterey before promising support there.
 
 ### Signed distribution
 
@@ -258,7 +264,9 @@ Use an external database and object storage for durable production data.
 
 The current app has a shared pioneer collection and no application-level login.
 Use it with trusted users; configure platform access before storing private work.
-Community Cloud resources are limited, so test short videos first. For regular
+Uploads are capped at 50 MB per file. One video renders at a time, with at most
+four running/queued requests. Community Cloud resources are limited, so test short
+videos first. For regular
 1080 × 1920 video production, use a host with sufficient CPU/RAM and persistent storage.
 
 Temporary cleanup is blocked while any render is queued or running. Render audio,
@@ -336,3 +344,20 @@ This project is intended for educational and historical content creation. Users 
 ### Black Pioneers: First in American History
 
 A digital initiative dedicated to documenting, preserving, and sharing the achievements of Black American pioneers through searchable profiles, educational resources, and short-form videos.
+
+## Server test and public-release checklist
+
+For the first Community Cloud test, set app sharing to **Private** in Streamlit
+settings and grant access only to the test users. GitHub repository visibility
+does not protect the shared studio collection.
+
+Validate: all six navigation pages; create a fictional pioneer; render one short
+with an image and JennyNeural narration; preview/download the MP4; confirm captions
+and audio; export the pioneer CSV; verify failed renders release their queue slot.
+Download every output you need to keep before restarting or redeploying.
+
+A merged/tested build is not a complete public-production service. Permanent cloud
+database/media storage and backups still require an external service configuration.
+Public desktop distribution additionally requires signing/notarization, dependency
+license compliance, and native OS compatibility tests. Do not distribute untested
+Windows/Linux installers; those are separate platform releases.

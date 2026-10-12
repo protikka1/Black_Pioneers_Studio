@@ -128,8 +128,43 @@ def _self_test() -> int:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # The bundled app.py is runtime source, so validate all its imports too.
     runpy.run_path(str(project_root / "app.py"), run_name="bundle_validation")
+    _verify_render(DATA_DIR / "temp")
     print(f"Bundle checks passed; runtime data: {DATA_DIR}")
     return 0
+
+
+def _verify_render(temp_root: Path) -> None:
+    """Check the packaged media pipeline without requiring network narration."""
+    from tempfile import TemporaryDirectory
+    from unittest.mock import patch
+    from PIL import Image
+    from moviepy import VideoFileClip
+    from black_pioneers_studio.rendering import generate_short
+
+    with TemporaryDirectory(prefix="bundle-render-", dir=temp_root) as folder:
+        root = Path(folder)
+        image = root / "test.png"
+        Image.new("RGB", (300, 400), (36, 72, 110)).save(image)
+        pioneer = root / "pioneer"
+        for name in ("audio", "output"):
+            (pioneer / name).mkdir(parents=True)
+
+        def test_audio(**kwargs):
+            subprocess.run([
+                os.environ["FFMPEG_BINARY"], "-hide_banner", "-loglevel", "error",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=0.25",
+                "-y", str(kwargs["output_path"]),
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        with patch("black_pioneers_studio.rendering.generate_narration", side_effect=test_audio):
+            video, _ = generate_short(
+                "Bundle Test", "A brief caption test.", [image], None,
+                "en-US-JennyNeural", 0, 0.1, pioneer, root / "job",
+            )
+        with VideoFileClip(str(video)) as clip:
+            if (clip.w, clip.h) != (1080, 1920) or clip.audio is None:
+                raise RuntimeError("Packaged video dimensions or audio are incorrect.")
+        print("Packaged 1080x1920 video, captions, and audio rendered successfully.")
 
 
 def _wait_for_http(url: str, timeout_seconds: float = 60.0,

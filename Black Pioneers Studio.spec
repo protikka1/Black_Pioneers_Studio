@@ -33,6 +33,13 @@ a = Analysis(
     binaries=binaries, datas=datas, hiddenimports=hiddenimports,
     hookspath=[], hooksconfig={}, runtime_hooks=[], excludes=[], noarchive=False,
 )
+# imageio's precompiled executables have versioned filenames. Keep their original
+# location during dependency analysis, then expose a stable name to the launcher.
+ffmpeg_destination = "bin/" + Path(ffmpeg).resolve().name
+a.binaries = [
+    ("bin/ffmpeg" if name.replace("\\", "/") == ffmpeg_destination else name, source, kind)
+    for name, source, kind in a.binaries
+]
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, [], exclude_binaries=True, name="Black Pioneers Studio",
