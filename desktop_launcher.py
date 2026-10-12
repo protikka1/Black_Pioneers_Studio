@@ -227,6 +227,10 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # macOS uses spawn for multiprocessing. PyInstaller's worker/resource-tracker
+    # arguments must be handled before they can enter the normal app launcher.
+    import multiprocessing
+    multiprocessing.freeze_support()
     try:
         raise SystemExit(main())
     except Exception as exc:
