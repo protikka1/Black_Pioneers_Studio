@@ -169,29 +169,67 @@ Primary run command:
 streamlit run app.py
 ```
 
-### Local Mac Use (Desktop Launcher)
+### Mac desktop app and DMG
 
-If you only need local use on macOS, you can run a dedicated launcher that starts
-Streamlit and opens the app automatically in your browser.
+The packaged desktop release includes Python, Streamlit and its browser assets,
+the studio modules, MoviePy, Edge TTS, and FFmpeg. Installed users do not need
+Python, Homebrew, a virtual environment, or the source checkout. It opens a local
+Streamlit server in the default browser; Microsoft narration still needs internet.
 
-Run launcher:
+From the repository on your Mac, use the existing `.venv` and build:
 
 ```bash
-source .venv/bin/activate
-python desktop_launcher.py
+bash scripts/build_mac_dmg.sh
 ```
 
-Build a macOS desktop app bundle (`.app`):
+The script installs the pinned build tool, builds and verifies the `.app`, then
+creates and verifies `dist/Black-Pioneers-Studio-macos-x86_64.dmg` on an Intel Mac
+(or `...-arm64.dmg` on Apple Silicon). Build on the target architecture and oldest
+macOS version you intend to support. Native Python packages must support that OS.
+The first build can take several minutes; PyInstaller reports progress in Terminal.
+
+Open the DMG and drag **Black Pioneers Studio.app** onto **Applications**, then
+launch it from Applications. To build only the application:
 
 ```bash
 bash scripts/build_mac_desktop_app.sh
 ```
 
-After build, open:
+New desktop data is stored outside the installed app:
 
 ```text
-dist/Black Pioneers Studio.app
+~/Library/Application Support/BlackPioneersStudio/database/pioneers.db
+~/Library/Application Support/BlackPioneersStudio/output/pioneers/
+~/Library/Application Support/BlackPioneersStudio/temp/
 ```
+
+This is a new desktop collection. The existing development database, uploaded
+media, and MLK video are not moved or included in the installer. Save copies of
+those files before attempting any separate migration. Development and cloud runs
+continue using their repository directory unless `BLACK_PIONEERS_DATA_DIR` is set.
+
+Diagnostics: `~/Library/Logs/BlackPioneersStudio.log`. The build-time verifier runs
+from a temporary directory with Python, virtual-environment variables, and Homebrew
+removed from PATH, checks imports and FFmpeg, and starts the packaged web server.
+No build is reported as verified if these checks fail. To stop the desktop server,
+quit its launcher; closing the browser tab alone does not stop the launcher.
+
+### Signed distribution
+
+Without a signing identity the app receives PyInstaller's local ad-hoc signature.
+For a public download, use an Apple Developer ID Application certificate and an
+already configured notarytool Keychain profile:
+
+```bash
+BLACK_PIONEERS_CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+BLACK_PIONEERS_NOTARY_PROFILE="your-existing-keychain-profile" \
+bash scripts/build_mac_dmg.sh
+```
+
+The script signs the app and disk image, submits the disk image for notarization,
+and staples the result. Do not put Apple credentials or certificates in Git.
+Public redistribution must also preserve the bundled dependencies' licenses and
+satisfy the source-distribution requirements of the FFmpeg build you distribute.
 
 ---
 

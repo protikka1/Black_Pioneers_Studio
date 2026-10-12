@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import sqlite3
 
-from black_pioneers_studio.paths import BASE_DIR
+from black_pioneers_studio.paths import DATA_DIR
 
 from .migrations import apply_migrations
 
-DATABASE_DIR = BASE_DIR / "database"
+DATABASE_DIR = DATA_DIR / "database"
 DATABASE_FILE = DATABASE_DIR / "pioneers.db"
 
 

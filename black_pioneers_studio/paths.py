@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+DATA_DIR = Path(os.environ.get("BLACK_PIONEERS_DATA_DIR") or (
+    Path.home() / "Library" / "Application Support" / "BlackPioneersStudio"
+    if getattr(sys, "frozen", False) else BASE_DIR
+)).expanduser().resolve()
 PROJECT_TITLE = "Black Pioneers: First in American History"
 
-OUTPUT_DIR = BASE_DIR / "output" / "pioneers"
+OUTPUT_DIR = DATA_DIR / "output" / "pioneers"
 PIONEERS_OUTPUT_DIR = OUTPUT_DIR
-TEMP_DIR = BASE_DIR / "temp"
+TEMP_DIR = DATA_DIR / "temp"
 
 WIDTH = 1080
 HEIGHT = 1920
