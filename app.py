@@ -37,7 +37,7 @@ from black_pioneers_studio.rendering import build_render_fingerprint, generate_s
 
 @st.cache_resource
 def get_render_job_manager() -> RenderJobManager:
-    return RenderJobManager(max_workers=2)
+    return RenderJobManager(max_workers=1, max_pending_jobs=4)
 
 
 def get_valid_caption_max_opacity() -> int:

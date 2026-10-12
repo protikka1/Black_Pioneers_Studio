@@ -14,7 +14,10 @@ RenderTask = Callable[[Callable[[float], None]], Path]
 
 
 class RenderJobManager:
-    def __init__(self, max_workers: int = 2) -> None:
+    def __init__(self, max_workers: int = 2, max_pending_jobs: int = 4) -> None:
+        if max_workers < 1 or max_pending_jobs < max_workers:
+            raise ValueError("Render capacity must allow at least one job per worker.")
+        self._max_pending_jobs = max_pending_jobs
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._lock = Lock()
         self._workspace_lock = RLock()
@@ -69,6 +72,10 @@ class RenderJobManager:
                         if existing_job and existing_job.status in {"queued", "running", "completed"}:
                             return existing_job
 
+            with self._lock:
+                pending = sum(job.status in {"queued", "running"} for job in self._jobs.values())
+                if pending >= self._max_pending_jobs:
+                    raise RuntimeError("The render queue is full. Wait for a video to finish, then try again.")
             job = self.create_job(pioneer_id=pioneer_id)
             if request_key:
                 with self._lock:
