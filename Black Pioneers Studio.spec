@@ -10,7 +10,8 @@ ffmpeg = os.environ.get("BLACK_PIONEERS_FFMPEG") or shutil.which("ffmpeg")
 if not ffmpeg or not Path(ffmpeg).is_file():
     raise SystemExit("FFmpeg is missing. Set BLACK_PIONEERS_FFMPEG to its full path.")
 
-datas = [(str(root / "app.py"), "studio"), (str(root / "LICENSE"), "studio")]
+datas = [(str(root / "app.py"), "studio"), (str(root / "LICENSE"), "studio"),
+         (str(root / "black_pioneers_studio" / "google_sign_in"), "black_pioneers_studio/google_sign_in")]
 binaries = [(str(Path(ffmpeg).resolve()), "bin")]
 hiddenimports = []
 for package in ("streamlit", "moviepy", "edge_tts", "imageio", "PIL"):

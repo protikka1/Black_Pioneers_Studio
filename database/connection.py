@@ -22,5 +22,8 @@ get_database_connection = get_connection
 
 
 def initialize_database() -> None:
+    from black_pioneers_studio.cloud import enabled
+    if enabled():
+        return
     with get_connection() as connection:
         apply_migrations(connection)

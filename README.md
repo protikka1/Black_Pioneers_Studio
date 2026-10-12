@@ -361,3 +361,164 @@ database/media storage and backups still require an external service configurati
 Public desktop distribution additionally requires signing/notarization, dependency
 license compliance, and native OS compatibility tests. Do not distribute untested
 Windows/Linux installers; those are separate platform releases.
+
+## Shared Supabase database and media: import and connect
+
+These tools are available to anyone using this repository. Each installation must
+use its own Supabase project and credentials. Sharing this repository does not grant
+access to somebody else's collection. The shared collection is a single studio:
+all authorized members can read, add, and update its records and media. Anonymous
+visitors and accounts absent from `studio_members` cannot access it. This is not a
+multi-tenant application and the current app does not offer collection deletion.
+
+### Prepare a hosted project
+
+Install the existing Python requirements in your activated `.venv`. Node 20+ runs
+the Supabase CLI through `npx`; manual PATH editing and a local Docker stack are
+not required for the following hosted migration commands:
+
+```bash
+npx --yes supabase --version
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push --dry-run
+npx supabase db push
+npx supabase migration list
+```
+
+Run interactive commands one at a time. Replace `YOUR_PROJECT_REF` with your
+project's dashboard reference; never paste credentials into command arguments.
+The migrations create `pioneers`, `pioneer_media`, the private `pioneer-media`
+bucket, and authorized-member policies. If the first two migrations are already
+applied, `db push` applies only the new authorized-member migration. Existing
+SQLite records/files remain local until imported. Do not use remote `db reset`.
+
+### Import existing localhost records and media
+
+The import defaults to a read-only plan. On your Mac, stop local editing and video
+renders while importing so the collection remains consistent. From the checkout:
+
+```bash
+source .venv/bin/activate
+python scripts/import_supabase.py --url https://YOUR_PROJECT_REF.supabase.co
+```
+
+Enter your Supabase **secret/service_role API key** at the hidden prompt. It is
+used only by the import process and is not written to disk. Keep it out of GitHub,
+screenshots, messages, and the running app's secrets. The dry-run checks existing
+cloud records and the private bucket, inventories recognized media, and stops on
+conflicting biographies instead of overwriting them.
+
+Before enabling the app, create your own sign-in account in Supabase
+**Authentication → Users → Add user**. Create a confirmed account and choose its password privately. Then import
+and authorize that existing account (replace the URL and email):
+
+```bash
+python scripts/import_supabase.py --url https://YOUR_PROJECT_REF.supabase.co --apply --authorize-email YOUR_EMAIL
+```
+
+`--apply` creates a SQLite backup in `migration-backups/`, imports matching pioneer
+fields with fresh cloud IDs, reuses matching records, uploads permanent images,
+source videos, narration, music, and generated videos, and verifies indexed object
+keys. Content-based media keys allow rerunning after a partial failure without
+creating duplicate media. Local files are never deleted. Remote identity sequences
+are not affected by imported SQLite IDs. Bucket/project upload-size limits still
+apply: an oversized video stops that import and remains safely on your Mac.
+
+The default database is `database/pioneers.db` in this checkout. For the installed
+Mac `.app` collection, use its separate data directory instead:
+
+```bash
+python scripts/import_supabase.py --url https://YOUR_PROJECT_REF.supabase.co --data-dir "$HOME/Library/Application Support/BlackPioneersStudio"
+```
+
+Add `--apply` only after reviewing the plan. Use `--database /absolute/path/pioneers.db`
+if a different SQLite file is authoritative. A missing media folder stops the plan
+so files cannot be silently skipped. JSON render-cache files and temporary caption
+images are not imported. Existing Streamlit Cloud SQLite data is a separate source;
+this Mac import does not read that server's local disk.
+
+### Enable the shared backend
+
+Copy `.streamlit/secrets.example.toml` to `.streamlit/secrets.toml` on the Mac.
+Edit it with your own project URL and **publishable key** (legacy anon key also
+works). Add the same three settings to Streamlit Community Cloud **Secrets**:
+
+```toml
+SUPABASE_ENABLED = true
+SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "YOUR_PUBLISHABLE_KEY"
+```
+
+Restart both apps with this version of the code. Sign in with the authorized
+Supabase Auth account. Reads are refreshed from the shared backend on each rerun;
+this is shared persistence, not automatic live screen updates. New pioneers save
+to PostgreSQL; render assets, music, narration, and finished videos save to private
+Storage. Create Short can reuse saved assets; Video Library previews shared videos
+through short-lived signed URLs. A failed upload reports a failed job and preserves
+the locally rendered file so it can be recovered/imported. Local render/cache
+folders remain machine-specific and are never used as cloud media references.
+
+The existing `.dmg` predates this adapter. Rebuild it with the current source to
+use shared storage, and supply these settings as environment variables to the
+installed launcher (it does not read another checkout's secrets). The source app
+and Cloud deployment can be tested first without rebuilding the desktop package.
+Without `SUPABASE_ENABLED=true`, the existing local SQLite behavior remains available.
+Imported/created remote records are not copied back into SQLite when disabling it.
+
+The CLI/schema checks and automated adapter tests do not certify a live migration.
+Verify pioneer counts, saved images, and video playback on both instances before
+relying on the shared collection. No secret credentials are bundled in desktop apps.
+
+### Optional Google sign-in
+
+The app can display Google's official **Continue with Google** button in addition
+to the existing email/password form. The browser passes Google's ID token to
+Supabase Auth, which verifies it and checks the login nonce. Studio membership is
+still required; signing in with Google does not automatically grant access to the
+shared collection. No Google Client Secret is sent to browsers or stored in git.
+
+1. Sign in to Google Cloud with the account that manages your app project. Open
+   **Google Auth Platform → Clients** (or **APIs & Services → Credentials**).
+2. Select the relevant **Web application** OAuth client and copy its Client ID.
+   If none exists, configure Google Auth Platform branding/audience and create a
+   Web application client named Black Pioneers Studio. While in testing mode, add
+   your intended test accounts to the project's test-user list.
+3. Add your app's exact **Authorized JavaScript origins**, without path/trailing
+   slash: `http://localhost`, `http://localhost:8501`, and your Cloud app's HTTPS
+   origin. A desktop launcher using another port needs that exact localhost port
+   registered too. Use `localhost`, not an unregistered `127.0.0.1` URL.
+4. Retain/add your Supabase provider callback under **Authorized redirect URIs**:
+   `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`. The in-app Google button
+   uses popup/ID-token mode; its token is not placed in a redirect URL.
+5. Enable Google in **Supabase → Authentication → Providers**. Set its Web Client
+   ID and Client Secret there. Keep nonce checking enabled. Google provider setup
+   must use the same client ID as the app so Supabase validates the audience.
+6. Add this alongside the other app settings in local and Cloud secrets:
+
+```toml
+GOOGLE_CLIENT_ID = "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
+```
+
+7. Restart the updated app and attempt Google sign-in. If it reports that the
+   account is not authorized, its Supabase Auth identity can now be added to the
+   `studio_members` table by the project owner. In Supabase SQL Editor, replace
+   the example email with the account you intend to authorize:
+
+```sql
+INSERT INTO public.studio_members (user_id)
+SELECT id FROM auth.users WHERE lower(email) = lower('YOUR_EMAIL')
+ON CONFLICT (user_id) DO NOTHING;
+```
+
+Then sign in again. Existing email/password accounts with the same verified email
+may be linked by Supabase; verify the actual Auth user before granting membership.
+Additional members can be authorized in the same way. The Client ID is an app
+identifier ending in `.apps.googleusercontent.com`, not a Gmail address, publishable
+Supabase key, or import secret key. Never share the Client Secret in screenshots.
+Google's popup can be blocked by browser settings; allow the app's sign-in popup
+or use the email/password method. Test both localhost and the Cloud origin after
+configuration. Automated tests cannot validate a live Google account login.
+
+References: [Google button setup](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid)
+and [Supabase Google provider](https://supabase.com/docs/guides/auth/social-login/auth-google).

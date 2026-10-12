@@ -32,3 +32,5 @@ buildozer.spec
 # Generated desktop application artifacts
 build/
 dist/
+
+migration-backups/

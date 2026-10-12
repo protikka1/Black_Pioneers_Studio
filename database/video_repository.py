@@ -11,5 +11,7 @@ def list_generated_videos() -> list[Path]:
 
 
 def count_generated_shorts() -> int:
-    return len(list_generated_videos())
+    from black_pioneers_studio.cloud import current_backend
+    backend = current_backend()
+    return len(backend.media(generated=True)) if backend else len(list_generated_videos())
 
