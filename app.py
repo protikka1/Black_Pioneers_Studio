@@ -10,6 +10,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from black_pioneers_studio.cloud import current_backend, require_login, enabled
 from black_pioneers_studio.jobs import RenderJobManager
 from database.connection import initialize_database
 from database.pioneer_repository import (
@@ -68,6 +69,7 @@ def configure_application() -> None:
 
     get_valid_caption_max_opacity()
     ensure_runtime_directories()
+    require_login()
     initialize_database()
 
 
@@ -303,6 +305,15 @@ def render_create_short() -> None:
         str(pioneer_by_name[selected_name]["id"])
     )
 
+    backend = current_backend()
+    saved_assets = []
+    if backend:
+        saved_assets = [item for item in backend.media(st.session_state["selected_pioneer_id"])
+                        if item["kind"] in ("image", "video") and "/output/" not in item["object_path"]]
+    asset_choices = {item["id"]: item for item in saved_assets}
+    chosen_assets = st.multiselect("Use saved images or video assets", options=list(asset_choices),
+                                  format_func=lambda key: asset_choices[key]["original_filename"]) if backend else []
+
     script = st.text_area(
         "Narration script",
         height=220,
@@ -360,6 +371,7 @@ def render_create_short() -> None:
 
     current_form_signature = (
         selected_name,
+        tuple(chosen_assets),
         script.strip(),
         voice,
         narration_rate,
@@ -433,7 +445,7 @@ def render_create_short() -> None:
             st.error("A narration script is required.")
             return
 
-        if not images and not video_assets:
+        if not images and not video_assets and not chosen_assets:
             st.error("Upload at least one image or video asset.")
             return
 
@@ -453,10 +465,16 @@ def render_create_short() -> None:
 
             try:
                 asset_paths = []
+                for media_id in chosen_assets:
+                    item = asset_choices[media_id]
+                    destination = job_directory / (item["id"] + Path(item["object_path"]).suffix)
+                    asset_paths.append(backend.download(item, destination))
                 for index, uploaded in enumerate(uploaded_assets):
                     asset_stem = make_safe_folder_name(Path(uploaded.name).stem) or f"asset_{index:04d}"
                     destination = job_directory / f"asset_{index:04d}_{asset_stem}{Path(uploaded.name).suffix.lower()}"
                     asset_paths.append(save_uploaded_file(uploaded, destination))
+                    if backend:
+                        backend.upload(selected_pioneer_id, destination, "images" if destination.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else "videos")
 
                 saved_music_path = None
                 if music:
@@ -465,6 +483,8 @@ def render_create_short() -> None:
                         f"{music_stem}_{uuid.uuid4().hex}{Path(music.name).suffix.lower()}"
                     )
                     saved_music_path = save_uploaded_file(music, music_destination)
+                    if backend:
+                        backend.upload(selected_pioneer_id, saved_music_path, "music")
 
                 request_key = build_render_fingerprint(
                     pioneer_name=selected_name,
@@ -498,6 +518,11 @@ def render_create_short() -> None:
                             caption_font_size=caption_font_size,
                             caption_bg_opacity=caption_bg_opacity,
                         )
+                        if backend:
+                            backend.refresh_if_needed()
+                            backend.upload(selected_pioneer_id, output_path, "output")
+                            for narration_path in (pioneer_folder / "audio").glob("*.mp3"):
+                                backend.upload(selected_pioneer_id, narration_path, "audio")
                         report_progress(0.95)
                         return output_path
                     finally:
@@ -524,6 +549,20 @@ def render_video_library() -> None:
     """Display generated videos."""
 
     st.title("Video Library")
+    backend = current_backend()
+    if backend:
+        videos = backend.media(generated=True)
+        if not videos:
+            st.info("No generated videos found yet.")
+            return
+        by_id = {item["id"]: item for item in videos}
+        chosen = st.selectbox("Preview shared video", options=list(by_id),
+                              format_func=lambda key: by_id[key]["original_filename"])
+        url = backend.signed_url(by_id[chosen])
+        st.video(url)
+        st.link_button("Open video to download", url)
+        st.caption(f"Total generated videos: {len(videos)}")
+        return
     videos = list_generated_videos()
 
     if not videos:
@@ -551,6 +590,7 @@ def render_settings() -> None:
     """Display application configuration."""
 
     st.title("Settings")
+    st.info("Shared Supabase collection" if enabled() else "Local SQLite collection")
 
     st.text_input("Output directory", value=str(OUTPUT_DIR), disabled=True)
     st.text_input("Temporary directory", value=str(TEMP_DIR), disabled=True)
@@ -682,7 +722,7 @@ def render_tools() -> None:
                 failed.append(f"{path.relative_to(TEMP_DIR)}: {exc}")
 
     temp_mb = _dir_size_mb(TEMP_DIR)
-    generated_count = len(list(PIONEERS_OUTPUT_DIR.rglob("*.mp4"))) if PIONEERS_OUTPUT_DIR.exists() else 0
+    generated_count = count_generated_shorts()
 
     col3, col4 = st.columns(2)
     col3.metric("Temp directory size", f"{temp_mb:.1f} MB")
@@ -712,7 +752,11 @@ def render_tools() -> None:
 
 
 def main() -> None:
-    configure_application()
+    try:
+        configure_application()
+    except RuntimeError as exc:
+        st.error(str(exc))
+        st.stop()
 
     selected_page = render_sidebar()
 

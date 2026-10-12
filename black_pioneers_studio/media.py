@@ -37,7 +37,8 @@ def count_generated_shorts() -> int:
 def get_or_create_pioneer_folder(pioneer: PioneerRecord) -> Path:
     folder_path = str(pioneer.get("folder_path") or "").strip()
 
-    if folder_path:
+    from .cloud import enabled
+    if folder_path and not enabled():
         folder = Path(folder_path)
     else:
         pioneer_id = int(str(pioneer["id"]))

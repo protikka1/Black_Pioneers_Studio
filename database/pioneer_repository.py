@@ -5,6 +5,8 @@ from datetime import datetime
 from black_pioneers_studio.models import PioneerRecord
 from black_pioneers_studio.paths import PROJECT_TITLE
 
+from black_pioneers_studio.cloud import current_backend
+
 from .connection import get_connection, initialize_database
 
 
@@ -14,6 +16,9 @@ def create_pioneer(
     achievement: str = "",
     biography: str = "",
 ) -> int:
+    backend = current_backend()
+    if backend is not None:
+        return backend.create_pioneer(name, category, achievement, biography)
     initialize_database()
     timestamp = datetime.now().isoformat(timespec="seconds")
 
@@ -46,6 +51,9 @@ def create_pioneer(
 
 
 def get_all_pioneers() -> list[PioneerRecord]:
+    backend = current_backend()
+    if backend is not None:
+        return backend.pioneers()
     initialize_database()
 
     with get_connection() as connection:
@@ -71,6 +79,8 @@ def get_all_pioneers() -> list[PioneerRecord]:
 
 
 def update_pioneer_folder(pioneer_id: int, folder_path: str) -> None:
+    if current_backend() is not None:
+        return  # Absolute paths are local cache details, never cloud record locations.
     initialize_database()
     timestamp = datetime.now().isoformat(timespec="seconds")
 

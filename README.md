@@ -361,3 +361,111 @@ database/media storage and backups still require an external service configurati
 Public desktop distribution additionally requires signing/notarization, dependency
 license compliance, and native OS compatibility tests. Do not distribute untested
 Windows/Linux installers; those are separate platform releases.
+
+## Shared Supabase database and media: import and connect
+
+These tools are available to anyone using this repository. Each installation must
+use its own Supabase project and credentials. Sharing this repository does not grant
+access to somebody else's collection. The shared collection is a single studio:
+all authorized members can read, add, and update its records and media. Anonymous
+visitors and accounts absent from `studio_members` cannot access it. This is not a
+multi-tenant application and the current app does not offer collection deletion.
+
+### Prepare a hosted project
+
+Install the existing Python requirements in your activated `.venv`. Node 20+ runs
+the Supabase CLI through `npx`; manual PATH editing and a local Docker stack are
+not required for the following hosted migration commands:
+
+```bash
+npx --yes supabase --version
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push --dry-run
+npx supabase db push
+npx supabase migration list
+```
+
+Run interactive commands one at a time. Replace `YOUR_PROJECT_REF` with your
+project's dashboard reference; never paste credentials into command arguments.
+The migrations create `pioneers`, `pioneer_media`, the private `pioneer-media`
+bucket, and authorized-member policies. If the first two migrations are already
+applied, `db push` applies only the new authorized-member migration. Existing
+SQLite records/files remain local until imported. Do not use remote `db reset`.
+
+### Import existing localhost records and media
+
+The import defaults to a read-only plan. On your Mac, stop local editing and video
+renders while importing so the collection remains consistent. From the checkout:
+
+```bash
+source .venv/bin/activate
+python scripts/import_supabase.py --url https://YOUR_PROJECT_REF.supabase.co
+```
+
+Enter your Supabase **secret/service_role API key** at the hidden prompt. It is
+used only by the import process and is not written to disk. Keep it out of GitHub,
+screenshots, messages, and the running app's secrets. The dry-run checks existing
+cloud records and the private bucket, inventories recognized media, and stops on
+conflicting biographies instead of overwriting them.
+
+Before enabling the app, create your own sign-in account in Supabase
+**Authentication → Users → Add user**. Create a confirmed account and choose its password privately. Then import
+and authorize that existing account (replace the URL and email):
+
+```bash
+python scripts/import_supabase.py --url https://YOUR_PROJECT_REF.supabase.co --apply --authorize-email YOUR_EMAIL
+```
+
+`--apply` creates a SQLite backup in `migration-backups/`, imports matching pioneer
+fields with fresh cloud IDs, reuses matching records, uploads permanent images,
+source videos, narration, music, and generated videos, and verifies indexed object
+keys. Content-based media keys allow rerunning after a partial failure without
+creating duplicate media. Local files are never deleted. Remote identity sequences
+are not affected by imported SQLite IDs. Bucket/project upload-size limits still
+apply: an oversized video stops that import and remains safely on your Mac.
+
+The default database is `database/pioneers.db` in this checkout. For the installed
+Mac `.app` collection, use its separate data directory instead:
+
+```bash
+python scripts/import_supabase.py --url https://YOUR_PROJECT_REF.supabase.co --data-dir "$HOME/Library/Application Support/BlackPioneersStudio"
+```
+
+Add `--apply` only after reviewing the plan. Use `--database /absolute/path/pioneers.db`
+if a different SQLite file is authoritative. A missing media folder stops the plan
+so files cannot be silently skipped. JSON render-cache files and temporary caption
+images are not imported. Existing Streamlit Cloud SQLite data is a separate source;
+this Mac import does not read that server's local disk.
+
+### Enable the shared backend
+
+Copy `.streamlit/secrets.example.toml` to `.streamlit/secrets.toml` on the Mac.
+Edit it with your own project URL and **publishable key** (legacy anon key also
+works). Add the same three settings to Streamlit Community Cloud **Secrets**:
+
+```toml
+SUPABASE_ENABLED = true
+SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "YOUR_PUBLISHABLE_KEY"
+```
+
+Restart both apps with this version of the code. Sign in with the authorized
+Supabase Auth account. Reads are refreshed from the shared backend on each rerun;
+this is shared persistence, not automatic live screen updates. New pioneers save
+to PostgreSQL; render assets, music, narration, and finished videos save to private
+Storage. Create Short can reuse saved assets; Video Library previews shared videos
+through short-lived signed URLs. A failed upload reports a failed job and preserves
+the locally rendered file so it can be recovered/imported. Local render/cache
+folders remain machine-specific and are never used as cloud media references.
+
+The existing `.dmg` predates this adapter. Rebuild it with the current source to
+use shared storage, and supply these settings as environment variables to the
+installed launcher (it does not read another checkout's secrets). The source app
+and Cloud deployment can be tested first without rebuilding the desktop package.
+Without `SUPABASE_ENABLED=true`, the existing local SQLite behavior remains available.
+Imported/created remote records are not copied back into SQLite when disabling it.
+
+The CLI/schema checks and automated adapter tests do not certify a live migration.
+Verify pioneer counts, saved images, and video playback on both instances before
+relying on the shared collection. No secret credentials are bundled in desktop apps.
