@@ -127,3 +127,43 @@ with patch.object(Backend, 'pioneers', return_value=[]) as records, patch.object
     result = subprocess.run([sys.executable, '-c', code], cwd=root, env=env,
                             capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stderr
+
+
+def test_google_login_exchanges_nonce_and_keeps_membership_gate():
+    backend = Backend('https://example.supabase.co', 'sb_publishable_test')
+    with patch.object(backend, 'request', return_value={'access_token': 'supabase.jwt', 'refresh_token': 'refresh'}) as request, patch.object(backend, 'rows', return_value=[{'user_id': 'owner'}]):
+        backend.login_google('google.id.token', 'raw-nonce')
+        assert request.call_args.kwargs['params'] == {'grant_type': 'id_token'}
+        assert request.call_args.kwargs['body'] == {'provider': 'google', 'id_token': 'google.id.token', 'nonce': 'raw-nonce'}
+    assert backend.token == 'supabase.jwt'
+    other = Backend('https://example.supabase.co', 'sb_publishable_test')
+    with patch.object(other, 'request', return_value={'access_token': 'supabase.jwt', 'refresh_token': 'refresh'}), patch.object(other, 'rows', return_value=[]):
+        with pytest.raises(RuntimeError, match='not authorized'):
+            other.login_google('google.id.token', 'raw-nonce')
+
+
+def test_google_component_contains_no_raw_nonce_or_secrets(tmp_path):
+    import os
+    import subprocess
+    import sys
+    code = '''
+from unittest.mock import patch
+from streamlit.testing.v1 import AppTest
+from black_pioneers_studio.cloud import Backend
+import hashlib
+with patch('streamlit.components.v1.declare_component') as declare, patch.object(Backend, 'pioneers', return_value=[]):
+    declare.return_value.return_value = None
+    app = AppTest.from_file('app.py').run(timeout=30)
+    assert not app.exception, app.exception
+    args = declare.return_value.call_args.kwargs
+    assert 'nonce' not in args
+    assert 'secret' not in args
+    assert args['hashed_nonce'] == hashlib.sha256(app.session_state['google_nonce'].encode()).hexdigest()
+'''
+    root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ, SUPABASE_ENABLED='true', SUPABASE_URL='https://example.supabase.co',
+               SUPABASE_PUBLISHABLE_KEY='sb_publishable_test', GOOGLE_CLIENT_ID='test.apps.googleusercontent.com',
+               BLACK_PIONEERS_DATA_DIR=str(tmp_path))
+    result = subprocess.run([sys.executable, '-c', code], cwd=root, env=env,
+                            capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr

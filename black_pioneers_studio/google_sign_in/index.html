@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Google sign-in</title>
+<style>body{margin:0;font-family:system-ui,sans-serif}#status{font-size:14px;color:#666;margin-top:8px}</style>
+</head>
+<body><div id="google-button"></div><div id="status" role="status">Loading Google sign-in…</div>
+<script>
+'use strict';
+const parentOrigin = new URL(document.referrer || window.location.href).origin;
+function send(type, extra = {}) {
+  window.parent.postMessage({isStreamlitMessage:true, type, ...extra}, parentOrigin);
+}
+let rendered = false;
+let args;
+let sdkReady = false;
+function renderButton() {
+  if (!args || !sdkReady || rendered) return;
+  rendered = true;
+  google.accounts.id.initialize({
+    client_id: args.client_id,
+    nonce: args.hashed_nonce,
+    ux_mode: 'popup',
+    auto_select: false,
+    callback: response => {
+      if (typeof response.credential !== 'string') return;
+      document.getElementById('status').textContent = 'Checking your account…';
+      send('streamlit:setComponentValue', {value:{credential:response.credential}, dataType:'json'});
+    }
+  });
+  google.accounts.id.renderButton(document.getElementById('google-button'),
+    {type:'standard', theme:'outline', size:'large', text:'continue_with', width:280});
+  document.getElementById('status').textContent = '';
+  send('streamlit:setFrameHeight', {height:72});
+}
+window.addEventListener('message', event => {
+  if (event.source !== window.parent || event.origin !== parentOrigin || event.data?.type !== 'streamlit:render') return;
+  args = event.data.args;
+  renderButton();
+});
+send('streamlit:componentReady', {apiVersion:1});
+send('streamlit:setFrameHeight', {height:72});
+const sdk = document.createElement('script');
+sdk.src = 'https://accounts.google.com/gsi/client';
+sdk.async = true;
+sdk.onload = () => {sdkReady = true; renderButton();};
+sdk.onerror = () => {document.getElementById('status').textContent = 'Google sign-in could not load. You can use email and password below.';};
+document.head.appendChild(sdk);
+</script></body></html>

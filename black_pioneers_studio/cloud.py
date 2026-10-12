@@ -8,6 +8,7 @@ import mimetypes
 import os
 import time
 import threading
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -25,7 +26,7 @@ def settings() -> dict:
         values = dict(st.secrets)
     except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
         values = {}
-    for name in ('SUPABASE_ENABLED', 'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY'):
+    for name in ('SUPABASE_ENABLED', 'SUPABASE_URL', 'SUPABASE_PUBLISHABLE_KEY', 'GOOGLE_CLIENT_ID'):
         if name in os.environ:
             values[name] = os.environ[name]
     return values
@@ -82,6 +83,16 @@ class Backend:
     def login(self, email, password):
         session = self.request('POST', '/auth/v1/token', params={'grant_type': 'password'},
                                body={'email': email, 'password': password})
+        self._accept_member_session(session)
+
+    def login_google(self, id_token, nonce):
+        if not id_token or not nonce:
+            raise ValueError('Google sign-in response is incomplete.')
+        session = self.request('POST', '/auth/v1/token', params={'grant_type': 'id_token'},
+                               body={'provider': 'google', 'id_token': id_token, 'nonce': nonce})
+        self._accept_member_session(session)
+
+    def _accept_member_session(self, session):
         self._set_session(session)
         if not self.rows('studio_members', {'select': 'user_id', 'limit': '1'}):
             raise RuntimeError('This account is not authorized for the studio collection.')
@@ -209,6 +220,9 @@ def require_login():
             st.rerun()
         return
     st.title('Sign in to Black Pioneers Studio')
+    if config.get('GOOGLE_CLIENT_ID'):
+        show_google_login(config)
+        st.divider()
     with st.form('supabase_sign_in', clear_on_submit=True):
         email = st.text_input('Email')
         password = st.text_input('Password', type='password')
@@ -222,3 +236,38 @@ def require_login():
         except (RuntimeError, ValueError, KeyError) as exc:
             st.error(str(exc) if not isinstance(exc, KeyError) else 'Supabase configuration is incomplete.')
     st.stop()
+
+
+def show_google_login(config):
+    import streamlit as st
+    import streamlit.components.v1 as components
+    client_id = config['GOOGLE_CLIENT_ID']
+    if not client_id.endswith('.apps.googleusercontent.com'):
+        st.error('Google Client ID must end with .apps.googleusercontent.com.')
+        return
+    if 'google_nonce' not in st.session_state:
+        st.session_state['google_nonce'] = secrets.token_urlsafe(32)
+    nonce = st.session_state['google_nonce']
+    hashed_nonce = hashlib.sha256(nonce.encode()).hexdigest()
+    component = components.declare_component('studio_google_sign_in',
+                                             path=str(Path(__file__).parent / 'google_sign_in'))
+    result = component(client_id=client_id, hashed_nonce=hashed_nonce,
+                       key='google_sign_in_' + hashed_nonce[:16], default=None)
+    if not result or not isinstance(result.get('credential'), str):
+        return
+    credential = result['credential']
+    attempt = hashlib.sha256(credential.encode()).hexdigest()
+    if st.session_state.get('google_attempt') == attempt:
+        if st.session_state.get('google_error'):
+            st.error(st.session_state['google_error'])
+        return
+    st.session_state['google_attempt'] = attempt
+    try:
+        backend = Backend(config['SUPABASE_URL'], config['SUPABASE_PUBLISHABLE_KEY'])
+        backend.login_google(credential, nonce)
+        st.session_state['supabase_backend'] = backend
+        st.rerun()
+    except (RuntimeError, ValueError, KeyError) as exc:
+        message = str(exc) if not isinstance(exc, KeyError) else 'Supabase configuration is incomplete.'
+        st.session_state['google_error'] = message
+        st.error(message)

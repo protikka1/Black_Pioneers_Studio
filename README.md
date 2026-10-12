@@ -469,3 +469,56 @@ Imported/created remote records are not copied back into SQLite when disabling i
 The CLI/schema checks and automated adapter tests do not certify a live migration.
 Verify pioneer counts, saved images, and video playback on both instances before
 relying on the shared collection. No secret credentials are bundled in desktop apps.
+
+### Optional Google sign-in
+
+The app can display Google's official **Continue with Google** button in addition
+to the existing email/password form. The browser passes Google's ID token to
+Supabase Auth, which verifies it and checks the login nonce. Studio membership is
+still required; signing in with Google does not automatically grant access to the
+shared collection. No Google Client Secret is sent to browsers or stored in git.
+
+1. Sign in to Google Cloud with the account that manages your app project. Open
+   **Google Auth Platform → Clients** (or **APIs & Services → Credentials**).
+2. Select the relevant **Web application** OAuth client and copy its Client ID.
+   If none exists, configure Google Auth Platform branding/audience and create a
+   Web application client named Black Pioneers Studio. While in testing mode, add
+   your intended test accounts to the project's test-user list.
+3. Add your app's exact **Authorized JavaScript origins**, without path/trailing
+   slash: `http://localhost`, `http://localhost:8501`, and your Cloud app's HTTPS
+   origin. A desktop launcher using another port needs that exact localhost port
+   registered too. Use `localhost`, not an unregistered `127.0.0.1` URL.
+4. Retain/add your Supabase provider callback under **Authorized redirect URIs**:
+   `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`. The in-app Google button
+   uses popup/ID-token mode; its token is not placed in a redirect URL.
+5. Enable Google in **Supabase → Authentication → Providers**. Set its Web Client
+   ID and Client Secret there. Keep nonce checking enabled. Google provider setup
+   must use the same client ID as the app so Supabase validates the audience.
+6. Add this alongside the other app settings in local and Cloud secrets:
+
+```toml
+GOOGLE_CLIENT_ID = "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"
+```
+
+7. Restart the updated app and attempt Google sign-in. If it reports that the
+   account is not authorized, its Supabase Auth identity can now be added to the
+   `studio_members` table by the project owner. In Supabase SQL Editor, replace
+   the example email with the account you intend to authorize:
+
+```sql
+INSERT INTO public.studio_members (user_id)
+SELECT id FROM auth.users WHERE lower(email) = lower('YOUR_EMAIL')
+ON CONFLICT (user_id) DO NOTHING;
+```
+
+Then sign in again. Existing email/password accounts with the same verified email
+may be linked by Supabase; verify the actual Auth user before granting membership.
+Additional members can be authorized in the same way. The Client ID is an app
+identifier ending in `.apps.googleusercontent.com`, not a Gmail address, publishable
+Supabase key, or import secret key. Never share the Client Secret in screenshots.
+Google's popup can be blocked by browser settings; allow the app's sign-in popup
+or use the email/password method. Test both localhost and the Cloud origin after
+configuration. Automated tests cannot validate a live Google account login.
+
+References: [Google button setup](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid)
+and [Supabase Google provider](https://supabase.com/docs/guides/auth/social-login/auth-google).
