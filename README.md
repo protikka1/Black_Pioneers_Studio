@@ -158,8 +158,8 @@ Black_Pioneers_Studio/
 Create and activate a virtual environment, then install dependencies:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -195,45 +195,56 @@ dist/Black Pioneers Studio.app
 
 ---
 
-## Production Deployment (Fletcher)
+## Streamlit Community Cloud deployment
 
-This repository is ready to deploy on Fletcher with Streamlit.
+1. Sign in at https://share.streamlit.io/ and connect the GitHub account.
+2. Select **Create app** and deploy from this repository:
+   - Repository: `protikka1/Black_Pioneers_Studio`
+   - Branch: `main` (or the preparation branch when testing before merge)
+   - Main file: `app.py`
+   - Advanced settings: Python **3.12**
+3. Click **Deploy** and inspect the build logs. Python packages are installed from
+   `requirements.txt`; FFmpeg and Linux caption fonts are installed from `packages.txt`.
+4. Create one pioneer, enter a short script, upload an image, generate a video,
+   and download the MP4. Edge TTS requires an outgoing network connection.
 
-### Runtime command
+Use `app.py` as the cloud entry point. The Mac desktop launcher and its generated
+application bundles are for local use.
 
-The startup command is defined in `Procfile`:
+### Data and access
+
+The app creates a new SQLite database on first run. Your local `pioneers.db` and
+media are ignored by Git and are not uploaded during deployment. Treat the local
+cloud filesystem as temporary: download videos and export pioneer CSVs from Tools.
+Use an external database and object storage for durable production data.
+
+The current app has a shared pioneer collection and no application-level login.
+Use it with trusted users; configure platform access before storing private work.
+Community Cloud resources are limited, so test short videos first. For regular
+1080 × 1920 video production, use a host with sufficient CPU/RAM and persistent storage.
+
+Temporary cleanup is blocked while any render is queued or running. Render audio,
+video output, and caption workspaces are isolated to prevent concurrent jobs from
+writing to the same files. Caption timing is estimated from equal chunks of the
+script rather than speech alignment.
+
+### Other Streamlit hosts
+
+The `Procfile` startup command is:
 
 ```text
 web: streamlit run app.py --server.port ${PORT:-8501} --server.address 0.0.0.0
 ```
 
-### Streamlit production config
+Install dependencies from `requirements.txt`, install FFmpeg and a supported font,
+and allow writes to `temp/`, `output/`, and `database/`. Use persistent storage for
+SQLite and generated media on a production host.
 
-Production server settings are defined in `.streamlit/config.toml`:
+### Validation
 
-- `headless = true`
-- `address = "0.0.0.0"`
-- `port = 8501` (platform port override supported through `PORT`)
-
-### Fletcher requirements checklist
-
-Before go-live, confirm:
-
-1. Install Python dependencies from `requirements.txt`.
-2. `ffmpeg` is available on `PATH` (required by MoviePy rendering).
-3. Writable runtime directories are allowed for:
-   - `temp/`
-   - `output/`
-   - `database/` (SQLite file persistence)
-4. Environment exposes a web port (`PORT`) for the Streamlit process.
-
-### CI validation
-
-GitHub Actions workflow `.github/workflows/ci.yml` validates:
-
-- dependency install
-- `python -m py_compile app.py database/*.py black_pioneers_studio/*.py`
-- smoke tests in `tests/test_streamlit_smoke.py`
+GitHub Actions installs the Python dependencies and `packages.txt` system packages,
+compiles the application modules, and runs the tests on Python 3.12. Before publishing,
+also verify one real narration/video render on the deployed server.
 
 ---
 

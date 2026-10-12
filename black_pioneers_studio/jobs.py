@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
-from threading import Lock
+from threading import Lock, RLock
 from typing import Callable
 from uuid import uuid4
 
@@ -16,10 +17,28 @@ class RenderJobManager:
     def __init__(self, max_workers: int = 2) -> None:
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._lock = Lock()
+        self._workspace_lock = RLock()
         self._jobs: dict[str, RenderJob] = {}
         self._futures: dict[str, Future[None]] = {}
         self._request_keys: dict[str, str] = {}
         self._job_request_keys: dict[str, str] = {}
+
+    @contextmanager
+    def prepare_workspace(self):
+        """Keep cleanup out while uploads are being prepared and queued."""
+        with self._workspace_lock:
+            yield
+
+    def has_active_jobs(self) -> bool:
+        with self._lock:
+            return any(job.status in {"queued", "running"} for job in self._jobs.values())
+
+    def clean_workspace_if_idle(self, cleanup: Callable[[], None]) -> bool:
+        with self._workspace_lock:
+            if self.has_active_jobs():
+                return False
+            cleanup()
+            return True
 
     def create_job(self, pioneer_id: int) -> RenderJob:
         job = RenderJob(
@@ -41,24 +60,25 @@ class RenderJobManager:
         *,
         request_key: str | None = None,
     ) -> RenderJob:
-        if request_key:
-            with self._lock:
-                existing_job_id = self._request_keys.get(request_key)
-                if existing_job_id:
-                    existing_job = self._jobs.get(existing_job_id)
-                    if existing_job and existing_job.status in {"queued", "running", "completed"}:
-                        return existing_job
+        with self._workspace_lock:
+            if request_key:
+                with self._lock:
+                    existing_job_id = self._request_keys.get(request_key)
+                    if existing_job_id:
+                        existing_job = self._jobs.get(existing_job_id)
+                        if existing_job and existing_job.status in {"queued", "running", "completed"}:
+                            return existing_job
 
-        job = self.create_job(pioneer_id=pioneer_id)
-        if request_key:
-            with self._lock:
-                self._request_keys[request_key] = job.job_id
-                self._job_request_keys[job.job_id] = request_key
+            job = self.create_job(pioneer_id=pioneer_id)
+            if request_key:
+                with self._lock:
+                    self._request_keys[request_key] = job.job_id
+                    self._job_request_keys[job.job_id] = request_key
 
-        future = self._executor.submit(self._run_job, job.job_id, task)
-        with self._lock:
-            self._futures[job.job_id] = future
-        return job
+            future = self._executor.submit(self._run_job, job.job_id, task)
+            with self._lock:
+                self._futures[job.job_id] = future
+            return job
 
     def _run_job(self, job_id: str, task: RenderTask) -> None:
         self.update_job(job_id, status="running", progress=0.05, error_message=None, output_path=None)
