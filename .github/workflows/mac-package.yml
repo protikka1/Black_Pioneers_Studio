@@ -41,7 +41,7 @@ jobs:
       - name: Build and verify app and DMG
         run: bash scripts/build_mac_dmg.sh
       - name: Save unsigned test installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Black-Pioneers-Studio-macos-${{ matrix.arch }}
           path: dist/*.dmg
